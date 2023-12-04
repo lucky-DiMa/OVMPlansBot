@@ -1,0 +1,8 @@
+/.venv/*
+/.venv/
+/.env.secret
+/bot_pid.txt
+/scheduler_pid.txt
+/nohup.out
+/plans.xlsx
+/LOG.log

@@ -1,0 +1,371 @@
+import re
+from datetime import date, timedelta, datetime
+from aiogram.enums import ContentType
+from aiogram.filters import Command
+from aiogram.utils.keyboard import KeyboardBuilder
+
+from classes.plans_bot_user import UserNotFoundException, PermissionDeniedException
+from cron import send_notifications
+from aiogram import types, F
+
+from check_message_types import is_command
+from classes import PlansBotUser, Plan, Email, State
+from create_bot import router, bot
+from filters import StateFilter
+from mongo_connector import mongo_db
+from mytime import next_send_day, beauty_date
+
+
+async def first_start_command(message: types.Message):
+    await message.delete()
+    await message.answer('Дорогой сотрудник, добро пожаловать в бота OVM group!')
+    await message.answer(
+        'Пожалуйста отправьте мне своё ФИО! Чтобы отменить регистрацию используйте команду /cancel')
+    user = PlansBotUser.reg(message.from_user.id)
+    user.state = 'TYPING FULLNAME'
+
+
+async def start_command(message: types.Message, user: PlansBotUser):
+    await message.delete()
+    await message.answer(f'Приветствую вас {user.fullname}!')
+
+
+async def all_messages(message: types.Message):
+    await message.reply('Что вы говорите??\n/help - список команд')
+
+
+async def no(_):
+    pass
+
+
+async def place_message(message: types.Message, user: PlansBotUser):
+    if is_command(message):
+        await message.reply('Извините нельзя использовать команды! :)')
+        return
+    await message.delete()
+    str_date = user.state.split()[-1]
+    user.state = 'NONE'
+    if Plan.get_by_date_and_user_id(message.from_user.id, str_date) is None:
+        Plan.create(user.id, f'На выезде {message.text}', str_date)
+        await user.send_message('Спасибо за оставленный план!')
+    else:
+        plan = Plan.get_by_date_and_user_id(message.from_user.id,
+                                            str_date)
+        plan.text = f'На выезде {message.text}'
+        await user.send_message('План успешно отредактирован!')
+    await user.delete_state_message()
+
+
+async def send_plan_command(message: types.Message, user: PlansBotUser):
+    await message.delete()
+    str_date = f'{next_send_day().day}.{next_send_day().month}.{next_send_day().year}'
+    markup = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text='В ОФИСЕ', callback_data=f'SEND IN OFFICE PLAN {str_date}'),
+                          types.InlineKeyboardButton(text='НА ВЫЕЗДЕ',
+                                                     callback_data=f'SEND PLACE WHERE YOU WILL BE {str_date}')],
+                         [types.InlineKeyboardButton(text='В  отпуске',
+                                                     callback_data=f'SEND START WORK DATE AFTER VACATION {str_date}')]])
+    if Plan.get_by_date_and_user_id(user.id,
+                                    str_date) is not None:
+        await user.send_message(
+            f'Вы редактируете уже написанный план на {beauty_date(str_date)} <code>{Plan.get_by_date_and_user_id(user.id, str_date).text}</code>',
+            markup=markup)
+        return
+    await user.send_message(f'Выберете где вы будете в {beauty_date(str_date)}:', markup=markup)
+
+
+async def get_plans_command(message: types.Message):
+    await message.delete()
+    await bot.send_chat_action(message.from_user.id, 'upload_document')
+    str_date = f'{next_send_day().day}.{next_send_day().month}.{next_send_day().year}'
+    Plan.create_plans_table(str_date)
+    await bot.send_document(message.from_user.id,
+                            types.FSInputFile('plans.xlsx', f'Планы на {beauty_date(str_date)}.xlsx'))
+
+
+async def no_access(message: types.Message):
+    await message.delete()
+    await message.answer('У вас нет доступа к боту!')
+
+
+async def fullname_message(message: types.Message, user: PlansBotUser):
+    if is_command(message):
+        await message.reply('Извините нельзя использовать команды! :)')
+        return
+    user.fullname = message.text
+    user.state = 'CHOOSING LOCATION'
+    await user.delete_state_message()
+    kb = []
+    for location in mongo_db["Locations"].find_one({})["list"]:
+        kb.append([types.InlineKeyboardButton(text=location, callback_data=f'SET LOCATION - {location}')])
+    markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
+    msg = await message.answer(
+        f'Ваше ФИО: <code>{user.fullname}</code>\nЕсли вы написали его неправильно то отмените регистрацию и начните её заново перейдя по длинной ссылке ещё раз!\nВыберите из какого вы региона!',
+        reply_markup=markup, parse_mode='HTML')
+    user.id_of_message_promoter_to_type = msg.message_id
+    await message.delete()
+
+
+async def banned(message: types.Message):
+    await message.reply(
+        f'Вы были заблокированы для разблокировки передайте ваш ID руководству\nID: <code>{message.from_user.id}</code>',
+        parse_mode='HTML')
+
+
+async def waiting_for_reg_confirmation(message: types.Message):
+    await message.reply('Пожалуйста дождитесь подтверждения регистрации!')
+
+
+async def start_work_date_message(message: types.Message, user: PlansBotUser):
+    str_date = message.text
+    try:
+        date(int(str_date.split('.')[2]), int(str_date.split('.')[1]), int(str_date.split('.')[0]))
+    except:
+        await message.reply('Дата написана некорректно')
+        return
+    if date(int(str_date.split('.')[2]), int(str_date.split('.')[1]), int(str_date.split('.')[0])) < date(
+            int(user.state.split()[-1].split('.')[2]), int(user.state.split()[-1].split('.')[1]),
+            int(user.state.split()[-1].split('.')[0])):
+        await message.reply(f'Написанная дата должна быть не раньше даты плана ({user.state.split()[-1]})!')
+        return
+    if date(int(str_date.split('.')[2]), int(str_date.split('.')[1]), int(str_date.split('.')[0])) > date(
+            int(user.state.split()[-1].split('.')[2]), int(user.state.split()[-1].split('.')[1]),
+            int(user.state.split()[-1].split('.')[0])) + timedelta(days=30):
+        await message.reply(f'Так долго у нас в отпуск не ходят!')
+        return
+    str_date = f"{int(str_date.split('.')[0])}.{int(str_date.split('.')[1])}.{int(str_date.split('.')[2])}"
+    plan_date = user.state.split()[-1]
+    user.state = 'NONE'
+    if Plan.get_by_date_and_user_id(message.from_user.id, plan_date) is None:
+        Plan.create(user.id, f'В отпуске до {str_date}', plan_date)
+        await user.send_message(
+            f'Спасибо за оставленный план! В дни отпуска я буду автоматически писать <code>В отпуске до {str_date}</code> в ваш план! Если ваши планы поменяются вы всегда можете изменить план командой /send_plan\nХорошего отдыха!')
+    else:
+        plan = Plan.get_by_date_and_user_id(message.from_user.id,
+                                            plan_date)
+        plan.text = f'В отпуске до {str_date}'
+        await user.send_message(
+            f'План успешно отредактирован! В дни отпуска я буду автоматически писать <code>В отпуске до {str_date}</code> в ваш план! Если ваши планы поменяются вы всегда можете изменить план командой /send_plan\nХорошего отдыха!)')
+    await message.delete()
+    await user.delete_state_message()
+
+
+async def cancel_command(message: types.Message, user: PlansBotUser):
+    if user.state == 'NONE':
+        await user.send_message('Я не просил вас ничего писать :)')
+    elif user.state in ['CHOOSING LOCATION', 'CHOOSING SECTION', 'TYPING FULLNAME']:
+        PlansBotUser.delete_by_id(user.id)
+        await message.answer('Регистрация отменена!')
+    else:
+        user.state = 'NONE'
+        await user.send_message('Действие отменено!')
+    await message.delete()
+
+
+async def unban_command(message: types.Message, user: PlansBotUser):
+    await message.delete()
+    msg = await user.send_message('Пожалуйста напишите ID пользователя которого хотите разблокировать!',
+                                  markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                                      [types.InlineKeyboardButton(text='ОТМЕНА',
+                                                                  callback_data='CANCEL TYPING UNBAN USER ID')]]))
+    user.id_of_message_promoter_to_type = msg.message_id
+    user.state = 'TYPING UNBAN USER ID'
+
+
+async def unban_user_id_message(message: types.Message, user: PlansBotUser):
+    try:
+        is_banned = PlansBotUser.is_banned_by_id(int(message.text))
+    except ValueError:
+        await message.reply('Вы написали не число!')
+        return
+    if not is_banned:
+        await message.answer(f'Я не нашел заблокированного пользователя с таким ID (<code>{message.text}</code>)',
+                             parse_mode='HTML')
+        return
+    banned_user_fullname = user.get_banned_user_fullname_by_id(int(message.text))
+    user.unban(int(message.text))
+    user.state = 'NONE'
+    await message.delete()
+    await message.answer(f'Пользователь {banned_user_fullname} с ID <code>{message.text}</code> разблокирован!',
+                         parse_mode='HTML')
+    await user.delete_state_message()
+
+
+async def help_command(message: types.Message, user: PlansBotUser):
+    await message.delete()
+    await message.answer(user.help_message_text)
+
+
+async def choose_location(_, user: PlansBotUser):
+    await user.send_message('Пожалуйста выберите регион!',
+                            reply_to_message_id=user.id_of_message_promoter_to_type)
+
+
+async def choose_section(_, user: PlansBotUser):
+    await user.send_message('Пожалуйста выберите отдел!',
+                            reply_to_message_id=user.id_of_message_promoter_to_type)
+
+
+async def restart_command(message: types.Message):
+    await message.delete()
+    await message.answer('RESTARTING...')
+    import os
+    os.system("bash main.sh")
+
+
+async def emails_command(message: types.Message):
+    await message.delete()
+    markup = types.InlineKeyboardMarkup(inline_keyboard=[
+        *[[types.InlineKeyboardButton(text=email.address, callback_data=f'EDIT EMAIL {email.address}')] for email in
+          Email.get_all()], [types.InlineKeyboardButton(text="➕ Добавить почту", callback_data='ADD EMAIL')]])
+    await message.answer('Все добавленные почты:' if len(markup.inline_keyboard) > 1 else 'Тут ещё нет почт :(',
+                         reply_markup=markup)
+
+
+async def add_email_address_message(message: types.Message, user: PlansBotUser):
+    address = message.text
+    if not re.fullmatch(Email.regex, address):
+        await message.reply('Адрес почты написан некорректно, попробуйте ещё раз!')
+        return
+    if Email.exists(address):
+        await message.reply('Эта почта уже добавлена!')
+        return
+    await message.delete()
+    email = Email.add(address)
+    await user.edit_state_message(email.editing_text, email.editing_markup)
+    user.state = f'EDITING EMAIL {address}'
+
+
+async def notify_command(message: types.Message):
+    await message.delete()
+    await send_notifications()
+    await message.answer('SENT')
+
+
+async def get_user_command(message: types.Message):
+    try:
+        given_user = PlansBotUser.get_by_id(int(message.text.split()[1]))
+        await message.delete()
+        markup = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text='Редактировать', callback_data=f'EDIT USER {given_user.id}')]])
+        await message.answer(given_user.get_info(), reply_markup=markup, parse_mode='HTML')
+    except IndexError:
+        await message.reply(
+            'Некорректное использование команды /get\_user\.\n\nЭта команда используется с аргументом, который передаётся через пробел\.\nШаблон использования: `/get\_user <ID>`\nПример: `/get\_user 1358414277`',
+            parse_mode='MarkdownV2')
+        return
+    except ValueError:
+        await message.reply(
+            'Некорректное значение аргумента\. В качестве аргумента должно передаваться целое число, ID желаемого пользователя\.\n\nЭта команда используется с аргументом, который передаётся через пробел\.\nШаблон использования: `/get\_user <ID>`\nПример: `/get\_user 1358414277`',
+            parse_mode='MarkdownV2')
+    except UserNotFoundException:
+        await message.reply(f'Пользователь с ID: <code>{message.text.split()[1]}</code> не найден.', parse_mode='HTML')
+
+
+async def new_users_fullname_message(message: types.Message, user: PlansBotUser):
+    try:
+        user.set_field(int(user.state.split()[-1]), "fullname", message.text)
+        user_to_edit = PlansBotUser.get_by_id(int(user.state.split()[-1]))
+        await bot.edit_message_text(chat_id=message.chat.id,
+                                    message_id=user.id_of_message_promoter_to_type,
+                                    text=user_to_edit.get_info(),
+                                    reply_markup=user_to_edit.editing_markup,
+                                    parse_mode='HTML')
+        user.state = f'EDITING USER {user_to_edit.id}'
+        await message.delete()
+    except PermissionDeniedException:
+        user_to_edit = PlansBotUser.get_by_id(int(user.state.split()[-1]))
+        await message.reply(
+            f"К сожалению {user_to_edit.fullname} имеет больше полномочий, чем вы, поэтому вы не имеете права его редактировать.")
+
+
+async def my_data_command(message: types.Message, user: PlansBotUser):
+    await message.answer(user.get_info(for_myself=True), parse_mode='HTML')
+
+
+async def toggle_notifications_command(message: types.Message, user: PlansBotUser):
+    if not user.able_to_switch_notifications:
+        await message.answer('К сожалению вы не можете управлять оповещениями :(')
+    else:
+        user.receive_notifications = not user.receive_notifications
+        await message.answer(f'Оповещения {"включены" if user.receive_notifications else "отключены"}')
+    await message.delete()
+
+
+async def get_logs_command(message: types.Message):
+    await message.delete()
+    await message.answer_document(types.FSInputFile('LOG.log', 'Логи.log'))
+
+
+async def invite_command(message:types.Message):
+    await message.delete()
+    await message.answer('Чтобы пригласить нового сотрудника либо скопируйте ссылку и отправьте ему, либо воспользуйтесь кнопкой ниже\n\n Ссылка: <code>https://t.me/plans1234bot?start=AAHIYqEo-le_LuKbbrrsXxLMmxwXmKi7zUM</code>',
+                         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text='Пригласить', switch_inline_query_chosen_chat=types.SwitchInlineQueryChosenChat(query='👆 нажмите на кнопку', allow_user_chats=True, allow_bot_chats=False, allow_channel_chats=False, allow_group_chats=False))]]),
+                         parse_mode='HTML')
+
+
+def reg_handlers():
+    router.message.register(no, lambda message: message.chat.type in ['group', 'supergroup'])
+    router.message.register(banned, lambda _, is_user_banned: is_user_banned)
+    router.message.register(first_start_command, Command('start'),
+                            lambda _, user_exists: not user_exists,
+                            F.text == '/start AAHIYqEo-le_LuKbbrrsXxLMmxwXmKi7zUM')
+    router.message.register(no_access, lambda _, user_exists: not user_exists)
+    router.message.register(waiting_for_reg_confirmation,
+                            StateFilter('WAITING FOR REG CONFIRMATION'))
+    router.message.register(get_user_command, Command('get_user'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/get_user"]})
+    router.message.register(cancel_command,
+                            Command('cancel'),
+                            F.content_type == ContentType.TEXT)
+    router.message.register(my_data_command,
+                            Command('my_data'),
+                            F.content_type == ContentType.TEXT)
+    router.message.register(toggle_notifications_command,
+                            Command('toggle_notifications'),
+                            F.content_type == ContentType.TEXT)
+    router.message.register(choose_location,
+                            StateFilter('CHOOSING LOCATION'))
+    router.message.register(choose_section,
+                            StateFilter('CHOOSING SECTION'))
+    router.message.register(place_message,
+                            StateFilter('TYPING PLACE ', startswith=True), F.content_type == ContentType.TEXT)
+    router.message.register(start_work_date_message,
+                            StateFilter('TYPING START WORK DATE', startswith=True),
+                            F.content_type == ContentType.TEXT)
+    router.message.register(new_users_fullname_message,
+                            StateFilter('EDITING USERS FULLNAME ', startswith=True), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["edit_users_fullname"]})
+    router.message.register(add_email_address_message,
+                            StateFilter('ADDING EMAIL'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/emails"]})
+    router.message.register(unban_user_id_message,
+                            StateFilter('TYPING UNBAN USER ID'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/unban"]})
+    router.message.register(fullname_message,
+                            StateFilter('TYPING FULLNAME'), F.content_type == ContentType.TEXT)
+    router.message.register(start_command, Command('start'), F.content_type == ContentType.TEXT)
+    router.message.register(help_command, Command('help'), F.content_type == ContentType.TEXT)
+    router.message.register(send_plan_command, Command('send_plan'), F.content_type == ContentType.TEXT)
+    router.message.register(get_logs_command,
+                            Command('get_logs'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/get_logs"]})
+    router.message.register(invite_command,
+                            Command('invite'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["invite_new_users"]})
+    router.message.register(get_plans_command,
+                            Command('get_plans'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/get_plans"]})
+    router.message.register(emails_command,
+                            Command('emails'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/emails"]})
+    router.message.register(restart_command,
+                            Command('restart'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/restart"]})
+    router.message.register(notify_command,
+                            Command('notify'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/notify"]})
+    router.message.register(unban_command,
+                            Command('unban'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/unban"]})
+    router.message.register(all_messages)
