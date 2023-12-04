@@ -5,7 +5,7 @@ bot_pid=`cat $bot_pid_file`
 scheduler_pid=`cat $scheduler_pid_file`
 cp /dev/null $bot_pid_file
 cp /dev/null $scheduler_pid_file
-source venv/bin/activate
+source .venv/bin/activate
 nohup python main.py &
 echo $! >> $bot_pid_file
 nohup python scheduler.py &
