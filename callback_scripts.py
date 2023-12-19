@@ -502,7 +502,7 @@ async def callback_for_cancel_editing_user_from_another_user_button(query: types
     await query.message.delete()
 
 
-async def callback_for_join_button(query: types.CallbackQuery, user_exists: bool, user: PlansBotUser):
+async def callback_for_join_button(query: types.CallbackQuery, user_exists: bool):
     if user_exists:
         await query.answer('Вы и так есть в нашей системе, не требуется)', True)
         return
@@ -529,7 +529,7 @@ async def callback_for_join_button(query: types.CallbackQuery, user_exists: bool
 
 def reg_handlers():
     router.callback_query.register(banned, lambda _, is_user_banned: is_user_banned)
-    router.callback_query.register(callback_for_join_button, lambda query: query.data.startswith("JOIN "))
+    router.callback_query.register(callback_for_join_button, F.data == 'JOIN')
     router.callback_query.register(no_access, lambda _, user_exists: not user_exists)
     router.callback_query.register(waiting_for_reg_confirmation, StateFilter('WAITING FOR REG CONFIRMATION'))
     router.callback_query.register(typing_fullname,
