@@ -60,11 +60,11 @@ async def send_plan_command(message: types.Message, user: PlansBotUser):
     await message.delete()
     str_date = f'{next_send_day().day}.{next_send_day().month}.{next_send_day().year}'
     markup = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='В ОФИСЕ', callback_data=f'SEND IN OFFICE PLAN {str_date}'),
-                          types.InlineKeyboardButton(text='НА ВЫЕЗДЕ',
-                                                     callback_data=f'SEND PLACE WHERE YOU WILL BE {str_date}')],
-                         [types.InlineKeyboardButton(text='В  отпуске',
-                                                     callback_data=f'SEND START WORK DATE AFTER VACATION {str_date}')]])
+        inline_keyboard=[
+        [types.InlineKeyboardButton(text='В ОФИСЕ', callback_data=f'SEND IN OFFICE PLAN {str_date}'),
+         types.InlineKeyboardButton(text='НА ВЫЕЗДЕ', callback_data=f'SEND PLACE WHERE YOU WILL BE {str_date}')],
+        [types.InlineKeyboardButton(text='В  ОТПУСКЕ', callback_data=f'SEND START WORK DATE AFTER VACATION {str_date}'),
+         types.InlineKeyboardButton(text='НА БОЛЬНИЧНОМ', callback_data=f'SEND START WORK DATE AFTER SICK {str_date}')]])
     if Plan.get_by_date_and_user_id(user.id,
                                     str_date) is not None:
         await user.send_message(
@@ -116,7 +116,7 @@ async def waiting_for_reg_confirmation(message: types.Message):
     await message.reply('Пожалуйста дождитесь подтверждения регистрации!')
 
 
-async def start_work_date_message(message: types.Message, user: PlansBotUser):
+async def start_work_date_after_vacation_message(message: types.Message, user: PlansBotUser):
     str_date = message.text
     try:
         date(int(str_date.split('.')[2]), int(str_date.split('.')[1]), int(str_date.split('.')[0]))
@@ -135,6 +135,7 @@ async def start_work_date_message(message: types.Message, user: PlansBotUser):
         return
     str_date = f"{int(str_date.split('.')[0])}.{int(str_date.split('.')[1])}.{int(str_date.split('.')[2])}"
     plan_date = user.state.split()[-1]
+    await user.delete_state_message()
     user.state = 'NONE'
     if Plan.get_by_date_and_user_id(message.from_user.id, plan_date) is None:
         Plan.create(user.id, f'В отпуске до {str_date}', plan_date)
@@ -147,7 +148,40 @@ async def start_work_date_message(message: types.Message, user: PlansBotUser):
         await user.send_message(
             f'План успешно отредактирован! В дни отпуска я буду автоматически писать <code>В отпуске до {str_date}</code> в ваш план! Если ваши планы поменяются вы всегда можете изменить план командой /send_plan\nХорошего отдыха!)')
     await message.delete()
+
+
+async def start_work_date_after_sick_message(message: types.Message, user: PlansBotUser):
+    str_date = message.text
+    try:
+        date(int(str_date.split('.')[2]), int(str_date.split('.')[1]), int(str_date.split('.')[0]))
+    except:
+        await message.reply('Дата написана некорректно')
+        return
+    if date(int(str_date.split('.')[2]), int(str_date.split('.')[1]), int(str_date.split('.')[0])) < date(
+            int(user.state.split()[-1].split('.')[2]), int(user.state.split()[-1].split('.')[1]),
+            int(user.state.split()[-1].split('.')[0])):
+        await message.reply(f'Написанная дата должна быть не раньше даты плана ({user.state.split()[-1]})!')
+        return
+    if date(int(str_date.split('.')[2]), int(str_date.split('.')[1]), int(str_date.split('.')[0])) > date(
+            int(user.state.split()[-1].split('.')[2]), int(user.state.split()[-1].split('.')[1]),
+            int(user.state.split()[-1].split('.')[0])) + timedelta(days=30):
+        await message.reply(f'Это слишком долго, думаю вы выздоровеете быстрее!')
+        return
+    str_date = f"{int(str_date.split('.')[0])}.{int(str_date.split('.')[1])}.{int(str_date.split('.')[2])}"
+    plan_date = user.state.split()[-1]
     await user.delete_state_message()
+    user.state = 'NONE'
+    if Plan.get_by_date_and_user_id(message.from_user.id, plan_date) is None:
+        Plan.create(user.id, f'На больничном до {str_date}', plan_date)
+        await user.send_message(
+            f'Спасибо за оставленный план! В дни больничного я буду автоматически писать <code>На больничном до {str_date}</code> в ваш план! Если вы выздоровеете раньше и ваши планы поменяются вы всегда можете изменить план командой /send_plan\nВыздоравливайте поскорее!')
+    else:
+        plan = Plan.get_by_date_and_user_id(message.from_user.id,
+                                            plan_date)
+        plan.text = f'На больничном до {str_date}'
+        await user.send_message(
+            f'План успешно отредактирован! В дни больничного я буду автоматически писать <code>На больничном до {str_date}</code> в ваш план! Если вы выздоровеете раньше и ваши планы поменяются вы всегда можете изменить план командой /send_plan\nВыздоравливайте поскорее!')
+    await message.delete()
 
 
 async def cancel_command(message: types.Message, user: PlansBotUser):
@@ -330,8 +364,11 @@ def reg_handlers():
                             StateFilter('CHOOSING SECTION'))
     router.message.register(place_message,
                             StateFilter('TYPING PLACE ', startswith=True), F.content_type == ContentType.TEXT)
-    router.message.register(start_work_date_message,
-                            StateFilter('TYPING START WORK DATE', startswith=True),
+    router.message.register(start_work_date_after_vacation_message,
+                            StateFilter('TYPING START WORK DATE AFTER VACATION', startswith=True),
+                            F.content_type == ContentType.TEXT)
+    router.message.register(start_work_date_after_sick_message,
+                            StateFilter('TYPING START WORK DATE AFTER SICK', startswith=True),
                             F.content_type == ContentType.TEXT)
     router.message.register(new_users_fullname_message,
                             StateFilter('EDITING USERS FULLNAME ', startswith=True), F.content_type == ContentType.TEXT,

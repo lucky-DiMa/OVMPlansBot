@@ -16,7 +16,8 @@ async def callback_for_send_plan_button(query: types.CallbackQuery, user: PlansB
     markup = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(text='В ОФИСЕ', callback_data=f'SEND IN OFFICE PLAN {str_date}'),
          types.InlineKeyboardButton(text='НА ВЫЕЗДЕ', callback_data=f'SEND PLACE WHERE YOU WILL BE {str_date}')],
-        [types.InlineKeyboardButton(text='В  отпуске', callback_data=f'SEND START WORK DATE AFTER VACATION {str_date}')]])
+        [types.InlineKeyboardButton(text='В  ОТПУСКЕ', callback_data=f'SEND START WORK DATE AFTER VACATION {str_date}'),
+         types.InlineKeyboardButton(text='НА БОЛЬНИЧНОМ', callback_data=f'SEND START WORK DATE AFTER SICK {str_date}')]])
     if Plan.get_by_date_and_user_id(user.id, f'{str_date}') is not None:
         await query.message.edit_text(
             f'Вы редактируете уже написанный план <code>{Plan.get_by_date_and_user_id(user.id, str_date).text}</code> на {beauty_date(str_date)}',
@@ -55,7 +56,12 @@ async def callback_for_cancel_typing_place_button(query: types.CallbackQuery, us
     await callback_for_send_plan_button(query, user)
 
 
-async def callback_for_cancel_typing_start_work_date_button(query: types.CallbackQuery, user: PlansBotUser):
+async def callback_for_cancel_typing_start_work_date_after_vacation_button(query: types.CallbackQuery, user: PlansBotUser):
+    user.state = 'NONE'
+    await callback_for_send_plan_button(query, user)
+
+
+async def callback_for_cancel_typing_start_work_date_after_sick_button(query: types.CallbackQuery, user: PlansBotUser):
     user.state = 'NONE'
     await callback_for_send_plan_button(query, user)
 
@@ -134,19 +140,26 @@ async def waiting_for_reg_confirmation(query: types.CallbackQuery):
     await query.answer('Пожалуйста дождитесь подтверждения регистрации!', True)
 
 
-async def callback_for_send_start_work_date_button(query: types.CallbackQuery):
-    reg_user = PlansBotUser.get_by_id(query.from_user.id)
-    if reg_user.state != 'NONE':
-        await query.answer('Сначала завершите действие!', True)
-        return
+async def callback_for_send_start_work_date_after_vacation_button(query: types.CallbackQuery, user: PlansBotUser):
     str_date = query.data.split()[-1]
     await query.message.delete()
-    msg = await reg_user.send_message(f'Пожалуйста напишите дату выхода на работу в формате ДД.ММ.ГГГГ!',
-                                      markup=types.InlineKeyboardMarkup(inline_keyboard=[
+    msg = await user.send_message(f'Пожалуйста напишите дату выхода на работу в формате ДД.ММ.ГГГГ!',
+                                  markup=types.InlineKeyboardMarkup(inline_keyboard=[
                                           [types.InlineKeyboardButton(text='<< НАЗАД >>',
-                                                                      callback_data=f'CANCEL TYPING START WORK DATE {str_date}')]]))
-    reg_user.id_of_message_promoter_to_type = msg.message_id
-    reg_user.state = f'TYPING START WORK DATE {str_date}'
+                                                                      callback_data=f'CANCEL TYPING START WORK DATE AFTER VACATION {str_date}')]]))
+    user.id_of_message_promoter_to_type = msg.message_id
+    user.state = f'TYPING START WORK DATE AFTER VACATION {str_date}'
+
+
+async def callback_for_send_start_work_date_after_sick_button(query: types.CallbackQuery, user: PlansBotUser):
+    str_date = query.data.split()[-1]
+    await query.message.delete()
+    msg = await user.send_message(f'Пожалуйста напишите дату выхода на работу в формате ДД.ММ.ГГГГ!',
+                                  markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                                          [types.InlineKeyboardButton(text='<< НАЗАД >>',
+                                                                      callback_data=f'CANCEL TYPING START WORK DATE AFTER SICK {str_date}')]]))
+    user.id_of_message_promoter_to_type = msg.message_id
+    user.state = f'TYPING START WORK DATE AFTER SICK {str_date}'
 
 
 async def callback_for_set_location_buttons(query: types.CallbackQuery, user: PlansBotUser):
@@ -531,7 +544,7 @@ def reg_handlers():
     router.callback_query.register(banned, lambda _, is_user_banned: is_user_banned)
     router.callback_query.register(callback_for_join_button, F.data == 'JOIN')
     router.callback_query.register(no_access, lambda _, user_exists: not user_exists)
-    router.callback_query.register(waiting_for_reg_confirmation, StateFilter('WAITING FOR REG CONFIRMATION'))
+    router.callback_query.register(waiting_for_reg_confirmation, StateFilter(   'WAITING FOR REG CONFIRMATION'))
     router.callback_query.register(typing_fullname,
                                    lambda query: PlansBotUser.get_by_id(query.from_user.id).state == 'TYPING FULLNAME')
     router.callback_query.register(choosing_location, StateFilter('CHOOSING LOCATION'),
@@ -546,8 +559,12 @@ def reg_handlers():
                                    lambda query: query.data.startswith('SEND PLACE WHERE YOU WILL BE'),
                                    flags={"state_filter": StateFilter('NONE'),
                                           "state_error_message": "Сначала завершите действие!"})
-    router.callback_query.register(callback_for_send_start_work_date_button,
-                                   lambda query: query.data.startswith('SEND START WORK DATE AFTER VACATION'))
+    router.callback_query.register(callback_for_send_start_work_date_after_vacation_button,
+                                   lambda query: query.data.startswith('SEND START WORK DATE AFTER VACATION'),
+                                   flags={"state_filter": StateFilter('NONE')})
+    router.callback_query.register(callback_for_send_start_work_date_after_sick_button,
+                                   lambda query: query.data.startswith('SEND START WORK DATE AFTER SICK'),
+                                   flags={"state_filter": StateFilter('NONE')})
     router.callback_query.register(callback_for_cancel_typing_place_button,
                                    lambda query: query.data.startswith('CANCEL TYPING PLACE'),
                                    flags={"check_state_message": True,
@@ -580,10 +597,16 @@ def reg_handlers():
                                    flags={"required_permissions": ["/emails"],
                                           "state_filter": StateFilter('NONE'),
                                           "state_error_message": "Сначала завершите действие!"})
-    router.callback_query.register(callback_for_cancel_typing_start_work_date_button,
-                                   lambda query: query.data.startswith('CANCEL TYPING START WORK DATE'),
+    router.callback_query.register(callback_for_cancel_typing_start_work_date_after_vacation_button,
+                                   lambda query: query.data.startswith('CANCEL TYPING START WORK DATE AFTER VACATION'),
                                    flags={"check_state_message": True,
-                                          "state_filter": StateFilter('TYPING START WORK DATE ',
+                                          "state_filter": StateFilter('TYPING START WORK DATE AFTER VACATION',
+                                                                      startswith=True),
+                                          "state_error_message": "Вы сейчас не пишете дату выхода на работу!"})
+    router.callback_query.register(callback_for_cancel_typing_start_work_date_after_sick_button,
+                                   lambda query: query.data.startswith('CANCEL TYPING START WORK DATE AFTER SICK'),
+                                   flags={"check_state_message": True,
+                                          "state_filter": StateFilter('TYPING START WORK DATE AFTER SICK',
                                                                       startswith=True),
                                           "state_error_message": "Вы сейчас не пишете дату выхода на работу!"})
     router.callback_query.register(callback_for_cancel_typing_ban_user_id_button,
@@ -762,4 +785,4 @@ def reg_handlers():
                                                                       startswith=True),
                                           "state_error_message": "Вы сейчас не редактируете пользователя!"})
     router.callback_query.register(callback_for_cancel_editing_user_from_another_user_button,
-                                   lambda query: query.data.split("CANCEL EDItiNG USER "))
+                                   lambda query: query.data.startswith("CANCEL EDITING USER "))

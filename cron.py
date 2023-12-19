@@ -14,9 +14,11 @@ async def send_notifications():
     for user in PlansBotUser.get_users_that_not_sent_plans(next_send_day()):
         if user.state in ['CHOOSING LOCATION', 'CHOOSING SECTION', 'TYPING FULLNAME', 'WAITING FOR REG CONFIRMATION']:
             continue
-        if Plan.get_by_date_and_user_id(user.id, str_today) and Plan.get_by_date_and_user_id(user.id,
+        if Plan.get_by_date_and_user_id(user.id, str_today) and (Plan.get_by_date_and_user_id(user.id,
                                                                                              str_today).text.startswith(
-                'В отпуске до '):
+                'В отпуске до ') or Plan.get_by_date_and_user_id(user.id,
+                                                                                             str_today).text.startswith(
+                'На больничном до ')):
             str_start_work_date = Plan.get_by_date_and_user_id(user.id, str_today).text.split()[-1]
             if next_send_day() < date(int(str_start_work_date.split('.')[2]), int(str_start_work_date.split('.')[1]),
                                       int(str_start_work_date.split('.')[0])):
