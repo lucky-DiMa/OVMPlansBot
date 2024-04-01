@@ -7,6 +7,7 @@ class Command(NamedTuple):
 
 
 commands = {'/send_plan': Command('Отправить план на завтра или понедельник (если сегодня пятница)'),
+            '/catalog': Command('Открыть каталог'),
             '/my_data': Command('Вся информация о вас, которую я храню'),
             '/toggle_notifications': Command('Включить/выключить оповещения'),
             '/cancel': Command('Отменить ввод информации'),
@@ -16,6 +17,7 @@ commands = {'/send_plan': Command('Отправить план на завтра
             '/invite': Command('Пригласить нового сотрудника', ['invite_new_users']),
             '/restart': Command('Программный перезапуск бота', ['/restart']),
             '/get_user': Command('Информация о пользователе и интерфейс для его редактирования по ID', ['/get_user']),
+            '/unban': Command('Разблокировать пользователя по ID', ['/unban']),
             '/get_logs': Command('Файл с логами программных ошибок', ['/get_logs']),
             '/get_users': Command('Таблица с информацией о всех пользователях (В разработке)', ['/get_users']),
             '/get_banned_users': Command('Таблица с информацией о всех заблокированных пользователях (В разработке)', ['/get_banned_users']),

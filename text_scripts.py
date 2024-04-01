@@ -2,14 +2,15 @@ import re
 from datetime import date, timedelta, datetime
 from aiogram.enums import ContentType
 from aiogram.filters import Command
-from aiogram.utils.keyboard import KeyboardBuilder
+from aiogram.types import InlineKeyboardMarkup
+from aiogram.utils.keyboard import KeyboardBuilder, ReplyKeyboardBuilder
 
 from classes.plans_bot_user import UserNotFoundException, PermissionDeniedException
 from cron import send_notifications
 from aiogram import types, F
 
 from check_message_types import is_command
-from classes import PlansBotUser, Plan, Email, State
+from classes import PlansBotUser, Plan, Email, State, CatalogItem
 from create_bot import router, bot
 from filters import StateFilter
 from mongo_connector import mongo_db
@@ -25,13 +26,52 @@ async def first_start_command(message: types.Message):
     user.state = 'TYPING FULLNAME'
 
 
+async def catalog_command(message: types.Message, user: PlansBotUser):
+    user.current_catalog_menu = 'main'
+    items = CatalogItem.get_by_prev_catalog_item_text('main')
+    kb_builder = ReplyKeyboardBuilder()
+    for item in items:
+        kb_builder.button(text=item.text)
+    kb_builder.adjust(2, repeat=True)
+    await message.delete()
+    await message.answer('Catalog:', reply_markup=kb_builder.as_markup(resize_keyboard=True))
+
+
+
 async def start_command(message: types.Message, user: PlansBotUser):
     await message.delete()
     await message.answer(f'Приветствую вас {user.fullname}!')
 
 
-async def all_messages(message: types.Message):
-    await message.reply('Что вы говорите??\n/help - список команд')
+async def all_messages(message: types.Message, user: PlansBotUser):
+    item = CatalogItem.get_by_text(message.text)
+    if message.text == 'back' and user.current_catalog_menu != 'main':
+        previous_catalog_item_text = CatalogItem.get_by_text(user.current_catalog_menu).prev_catalog_item_text
+        if previous_catalog_item_text == 'main':
+            user.current_catalog_menu = 'main'
+            items = CatalogItem.get_by_prev_catalog_item_text('main')
+            kb_builder = ReplyKeyboardBuilder()
+            for item in items:
+                kb_builder.button(text=item.text)
+            kb_builder.adjust(2, repeat=True)
+            await message.answer('Catalog:', reply_markup=kb_builder.as_markup(resize_keyboard=True))
+            return
+        else:
+            item = CatalogItem.get_by_text(CatalogItem.get_by_text(user.current_catalog_menu).prev_catalog_item_text)
+    if not item:
+        await message.reply('Что вы говорите??\n/help - список команд')
+    else:
+        item_kb = item.new_keyboard
+        if item_kb:
+            user.current_catalog_menu = item.text
+            kb_builder = ReplyKeyboardBuilder()
+            for _item in item_kb:
+                kb_builder.button(text=_item.text)
+            kb_builder.button(text='back')
+            kb_builder.adjust(2, repeat=True)
+            await message.answer(item.message_text, reply_markup=kb_builder.as_markup(resize_keyboard=True))
+        else:
+            await message.answer(item.message_text)
 
 
 async def no(_):
@@ -351,6 +391,9 @@ def reg_handlers():
                             flags={"required_permissions": ["/get_user"]})
     router.message.register(cancel_command,
                             Command('cancel'),
+                            F.content_type == ContentType.TEXT)
+    router.message.register(catalog_command,
+                            Command('catalog'),
                             F.content_type == ContentType.TEXT)
     router.message.register(my_data_command,
                             Command('my_data'),

@@ -54,7 +54,7 @@ class BannedUserNotFoundException(Exception):
 
 class PlansBotUser:
     fields = ["id", "fullname", "state", "location", "section", "id_of_message_promoter_to_type", "is_admin",
-              "is_owner", "receive_notifications", "able_to_switch_notifications"]
+              "is_owner", "receive_notifications", "able_to_switch_notifications", "current_catalog_menu"]
     full_admin_permissions = {perm_name: True for perm_name in permissions.keys()}
     default_admin_permissions = {perm_name: False for perm_name in permissions.keys()}
 
@@ -116,7 +116,9 @@ class PlansBotUser:
                  is_admin: bool = False,
                  is_owner: bool = False,
                  receive_notifications: bool = True,
-                 able_to_switch_notifications: bool = False):
+                 able_to_switch_notifications: bool = False,
+                 current_catalog_menu: str = 'main'):
+        self.__current_catalog_menu = current_catalog_menu
         self.__able_to_switch_notifications = able_to_switch_notifications
         self.__receive_notifications = receive_notifications
         self.__is_owner = is_owner
@@ -167,6 +169,10 @@ class PlansBotUser:
     @property
     def id_of_message_promoter_to_type(self):
         return self.__id_of_message_promoter_to_type
+
+    @property
+    def current_catalog_menu(self):
+        return self.__current_catalog_menu
 
     def get_info(self, for_myself: bool = False):
         from classes import State
@@ -225,6 +231,12 @@ class PlansBotUser:
         self.__able_to_switch_notifications = able_to_switch_notifications
         mongo_db["Users"].update_one({"id": self.id},
                                      {"$set": {"able_to_switch_notifications": able_to_switch_notifications}})
+
+    @current_catalog_menu.setter
+    def current_catalog_menu(self, current_catalog_menu: bool):
+        self.__current_catalog_menu = current_catalog_menu
+        mongo_db["Users"].update_one({"id": self.id},
+                                     {"$set": {"current_catalog_menu": current_catalog_menu}})
 
     def is_allowed(self, permission_name: str):
         return bool(mongo_db["Users"].find_one({"id": self.id})["admin_permissions"].get(permission_name, False))
@@ -383,6 +395,7 @@ class PlansBotUser:
                                           "is_admin": new_user.is_admin,
                                           "receive_notifications": new_user.receive_notifications,
                                           "able_to_switch_notifications": new_user.able_to_switch_notifications,
+                                          "current_catalog_menu": new_user.current_catalog_menu,
                                           "admin_permissions": PlansBotUser.default_admin_permissions
                                           })
         return cls.get_by_id(tg_id)
@@ -398,7 +411,8 @@ class PlansBotUser:
                    user_dict["is_admin"],
                    user_dict["is_owner"],
                    user_dict["receive_notifications"],
-                   user_dict["able_to_switch_notifications"]
+                   user_dict["able_to_switch_notifications"],
+                   user_dict["current_catalog_menu"]
                    )
 
     @classmethod
