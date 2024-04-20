@@ -516,6 +516,12 @@ class PlansBotUser:
             if new_field not in user_dict.keys():
                 mongo_db["Users"].update_one({"id": user_dict["id"]}, {"$set": {new_field: default_value}})
 
+    @classmethod
+    def migrate_add_new_permission(cls, new_perm: str):
+        for user_dict in mongo_db["Users"].find({}):
+            if "admin_permissions" in user_dict.keys() and new_perm not in user_dict["admin_permissions"].keys():
+                mongo_db["Users"].update_one({"id": user_dict["id"]}, {"$set": {f"admin_permissions.{new_perm}": user_dict["admin_permissions"]["choose_admins"]}})
+
     @property
     def is_editing_by_someone(self):
         user_json = mongo_db['Users'].find_one({"state": {"$regex": f"{self.id}$"}}, ["id"])

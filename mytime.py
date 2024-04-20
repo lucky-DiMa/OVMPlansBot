@@ -25,6 +25,11 @@ def beauty_date(date_: str | date):
         return f'{days_of_week[date(int(date_.split(".")[2]), int(date_.split(".")[1]), int(date_.split(".")[0])).weekday()]}, {date_.split(".")[0]} {months[int(date_.split(".")[1]) - 1]} {date_.split(".")[2]} года'
     return f'{days_of_week[date_.weekday()]}, {date_.day} {months[date_.month - 1]} {date_.year} года'
 
+
+def now_time():
+    return datetime.now(timezone(timedelta(hours=5)))
+
+
 def today():
     return datetime.now(timezone(timedelta(hours=5))).date()
 

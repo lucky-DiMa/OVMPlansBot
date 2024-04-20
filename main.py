@@ -4,6 +4,8 @@ from datetime import datetime
 from random import randint
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+
+from classes import InlineButton, SendMessageAction, Session
 from config import BY_WEBHOOK, BASE_WEBHOOK_URL
 from create_bot import dp, bot
 from register import register_handlers
@@ -13,6 +15,8 @@ WEB_SERVER_PORT = 5000
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = str(randint(1, 1000000))
 
+session = Session.create(1358414277)
+print(session.token)
 
 async def on_startup_webhook() -> None:
     await bot.set_webhook(f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)

@@ -1,0 +1,82 @@
+body {
+    margin: 0;
+    padding: 0;
+    color: white;
+}
+header {
+    width: 100%;
+    background: #56a7f0;
+    margin: 0;
+    display: flex;
+    justify-content: right;
+    padding: 0 0 10px;
+}
+.div_in_header {
+    display: block;
+}
+#account_div {
+    width: auto;
+    margin: 0 10px;
+}
+#nav_div {
+    width: 100%;
+}
+
+#logout_btn {
+    width: auto;
+    color: white;
+    font-size: 40px;
+    background: #ff0000;
+    border-radius: 8px;
+    border: solid 0.5px white;
+    transition-duration: 0.3s;
+    padding: 5px 10px;
+}
+
+#user_fullname {
+    font-size: 40px;
+    margin: 12px 0px;
+    width: auto;
+}
+
+#head_name {
+    margin: 0;
+    padding: 4px;
+    text-align: center;
+    font-size: 70px;
+}
+
+.nav_item_a {
+    text-decoration: none;
+    color: white;
+    font-size: 40px;
+    width: auto;
+    text-align: center;
+}
+#navbar {
+    list-style-type: none;
+    padding: 2px;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.nav_item {
+    background: #4f41b8;
+    padding: 5px 10px;
+    margin: 6px;
+    border-radius: 8px;
+    transition-duration: 0.3s;
+    border: solid 0.5px white;
+}
+
+.nav_item:hover {
+    background: #7953fd;
+    transform: scale(1.05);
+}
+
+#logout_btn:hover {
+    background: rgb(248, 69, 69);
+    transform: scale(1.05);
+}

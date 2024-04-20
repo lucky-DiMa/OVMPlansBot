@@ -19,6 +19,7 @@ commands = {'/send_plan': Command('Отправить план на завтра
             '/get_user': Command('Информация о пользователе и интерфейс для его редактирования по ID', ['/get_user']),
             '/unban': Command('Разблокировать пользователя по ID', ['/unban']),
             '/get_logs': Command('Файл с логами программных ошибок', ['/get_logs']),
+            '/edit_catalog': Command('Изменить каталог', ['/edit_catalog']),
             '/get_users': Command('Таблица с информацией о всех пользователях (В разработке)', ['/get_users']),
             '/get_banned_users': Command('Таблица с информацией о всех заблокированных пользователях (В разработке)', ['/get_banned_users']),
             '/get_admins': Command('Таблица с информацией о всех администраторах (В разработке)', ['/get_admins']),

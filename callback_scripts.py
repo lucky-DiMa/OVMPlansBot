@@ -4,6 +4,7 @@ from admin_permission import permissions
 from classes import PlansBotUser, Email
 from aiogram import types, F
 from classes import Plan
+from classes.inline_button import InlineButton, ButtonCallbackData
 from classes.plans_bot_user import PermissionDeniedException
 from create_bot import router, bot
 from filters import StateFilter
@@ -179,7 +180,7 @@ async def callback_for_set_location_buttons(query: types.CallbackQuery, user: Pl
 async def callback_for_set_section_buttons(query: types.CallbackQuery, user: PlansBotUser):
     user.state = 'WAITING FOR REG CONFIRMATION'
     user.section = query.data.split(' - ')[1]
-    await bot.send_message(404053217,
+    await bot.send_message(1358414277,
                            f'Запрос на доступ к боту от {user.fullname}\nВыбранный регион: {user.location}\nВыбранный отдел: {user.section}\nИнформация об аккаунте в Telegram:\nID: {user.id}\nПолное имя: {query.from_user.full_name}\nUsername: {f"@{query.from_user.username}" if query.from_user.username else "не указан"}',
                            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
                                [types.InlineKeyboardButton(text='Принять', callback_data=f'ACCEPT REG {user.id}'),
@@ -540,6 +541,11 @@ async def callback_for_join_button(query: types.CallbackQuery, user_exists: bool
                                                                                                                    callback_data=query.data)]]), parse_mode='HTML')
 
 
+async def buttons_callback(query: types.CallbackQuery, user: PlansBotUser, callback_data: ButtonCallbackData):
+    await query.answer()
+    await (InlineButton.get_by_id(callback_data.button_id)).process_tap(user)
+
+
 def reg_handlers():
     router.callback_query.register(banned, lambda _, is_user_banned: is_user_banned)
     router.callback_query.register(callback_for_join_button, F.data == 'JOIN')
@@ -553,6 +559,8 @@ def reg_handlers():
                                    lambda query: not query.data.startswith('SET SECTION - '))
     router.callback_query.register(callback_for_send_plan_button,
                                    lambda query: query.data.startswith('SEND PLAN'))
+    router.callback_query.register(buttons_callback,
+                                   ButtonCallbackData.filter())
     router.callback_query.register(callback_for_send_in_office_plan_button,
                                    lambda query: query.data.startswith('SEND IN OFFICE PLAN'))
     router.callback_query.register(callback_for_send_place_button,

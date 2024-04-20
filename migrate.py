@@ -1,9 +1,4 @@
 from classes import PlansBotUser
 
 
-# User.migrate('notifications', True)
-# User.migrate('able_to_change_notifications', False)
-# User.migrate('is_owner', False)
-# User.migrate('is_admin', False)
-PlansBotUser.migrate('current_catalog_menu',
-                     'main')
+PlansBotUser.migrate_add_new_permission('/edit_catalog')

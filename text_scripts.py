@@ -45,7 +45,7 @@ async def start_command(message: types.Message, user: PlansBotUser):
 
 async def all_messages(message: types.Message, user: PlansBotUser):
     item = CatalogItem.get_by_text(message.text)
-    if message.text == 'back' and user.current_catalog_menu != 'main':
+    if message.text == 'Назад' and user.current_catalog_menu != 'main':
         previous_catalog_item_text = CatalogItem.get_by_text(user.current_catalog_menu).prev_catalog_item_text
         if previous_catalog_item_text == 'main':
             user.current_catalog_menu = 'main'
@@ -61,17 +61,7 @@ async def all_messages(message: types.Message, user: PlansBotUser):
     if not item:
         await message.reply('Что вы говорите??\n/help - список команд')
     else:
-        item_kb = item.new_keyboard
-        if item_kb:
-            user.current_catalog_menu = item.text
-            kb_builder = ReplyKeyboardBuilder()
-            for _item in item_kb:
-                kb_builder.button(text=_item.text)
-            kb_builder.button(text='back')
-            kb_builder.adjust(2, repeat=True)
-            await message.answer(item.message_text, reply_markup=kb_builder.as_markup(resize_keyboard=True))
-        else:
-            await message.answer(item.message_text)
+        await item.process_tap(user)
 
 
 async def no(_):
