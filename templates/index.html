@@ -27,10 +27,10 @@
             <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="plans1234bot" data-size="large" data-onauth="onTelegramAuth(user)" data-request-access="write"></script>
             <script type="text/javascript">
               function onTelegramAuth(user) {
-                fetch('https://plansbot.vm-9d28b85f.na4u.ru/login', {method: "POST", body: JSON.stringify({telegram_id: user.id})}).then((response) => response.json()).then((response) => {
-                    console.log(response)
-                    if (response.body.success) location.reload();
-                    else alert(response.body.message)
+                fetch('https://plansbot.vm-f9750063.na4u.ru/login', {method: "POST", body: JSON.stringify({telegram_id: user.id}), headers: {"Content-type": "application/json; charset=UTF-8"}}).then((response) => response.json()).then((response) => {
+                    console.log(response);
+                    if (response.success) location.reload();
+                    else alert(response.message)
                 })
               }
             </script>

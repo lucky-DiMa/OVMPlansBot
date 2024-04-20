@@ -59,7 +59,7 @@ async def main(wd: int = datetime.today().weekday()):
     return create_table(await get_json(wd + 1, 2))
 
 
-from flask import Flask, request, json, render_template, sessions, make_response
+from flask import Flask, request, json, render_template, sessions, make_response, jsonify
 
 app = Flask(__name__)
 
@@ -109,16 +109,16 @@ def index():
 def login():
     telegram_id = request.json['telegram_id']
     if not PlansBotUser.exists_by_id(telegram_id):
-        return {"success": False, 'message': "У вас нет доступа к боту!"}
+        return jsonify({"success": False, 'message': "У вас нет доступа к боту!"})
     if not PlansBotUser.registered_by_id(telegram_id):
-        return {"success": False, 'message': "Пройдите регистрацию или дождитесь подтверждения регистрации!"}
+        return jsonify({"success": False, 'message': "Пройдите регистрацию или дождитесь подтверждения регистрации!"})
     user = PlansBotUser.get_by_id(telegram_id)
     session = Session.create(telegram_id)
     try:
         asyncio.run(user.send_message(f'❗️❗️❗️ Кто-то зашёл в ваш аккаунт на сайте!\nВремя: {datetime.now()}\n\n❗️❗️❗️ Если это были не вы, срочно завершите сессию через команду /sessions'))
     except:
-        return {"success": False, 'message': 'По какой-то причине я не могу написать сообщение о входе на ваш аккаунт в Telegram, в целях безопасности попытка входа была предотвращена!'}
-    response = make_response({"success": True})
+        return jsonify({"success": False, 'message': 'По какой-то причине я не могу написать сообщение о входе на ваш аккаунт в Telegram, в целях безопасности попытка входа была предотвращена!'})
+    response = make_response(jsonify({"success": True}))
     response.set_cookie('session_token', session.token)
     return response
 
