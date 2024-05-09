@@ -4,7 +4,8 @@ from datetime import datetime
 
 import aiohttp
 
-from classes import Session, PlansBotUser
+import config
+from classes import Session, PlansBotUser, CatalogItem, SendMessageAction
 
 
 def create_table(info: dict):
@@ -104,6 +105,18 @@ def index():
     user = PlansBotUser.get_by_id(session.telegram_id)
     return render_template('index.html', logged_in=True, user=user)
 
+@app.route('/catalog')
+def catalog():
+    token = request.cookies.get('session_token')
+    session = Session.get_by_token(token)
+    if not token or not session:
+        return render_template('error.html', logged_in=False, message="Вы не вошли в аккаунт!")
+    user = PlansBotUser.get_by_id(session.telegram_id)
+    if not user.is_allowed("/edit_catalog"):
+        return render_template('error.html', logged_in=True, user=user, message="Недостаточно прав!")
+    return render_template('catalog.html', logged_in=True, user=user,
+                           catalog_items=CatalogItem.get_by_prev_catalog_item_text('main'))
+
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -122,3 +135,72 @@ def login():
     response.set_cookie('session_token', session.token)
     return response
 
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    Session.end_by_token(request.cookies.get('session_token'))
+    response = make_response(jsonify({"ended": True}))
+    response.set_cookie('session_token', '', expires=0)
+    return response
+
+
+@app.context_processor
+def inject_dict_for_all_templates():
+    return {"site_url": config.SITE_URL}
+
+
+@app.route('/catalog_item', methods=['GET'])
+@app.route('/catalog_item', methods=['GET'])
+def catalog_item():
+    token = request.cookies.get('session_token')
+    session = Session.get_by_token(token)
+    if not token or not session or not PlansBotUser.get_by_id(session.telegram_id).is_allowed("/edit_catalog"):
+        return {'success': False}
+    catalog_item_id = int(request.args.get('id'))
+    response = CatalogItem.get_by_id(catalog_item_id).to_JSON()
+    response['success'] = True
+    return jsonify(response)
+
+@app.route('/catalog_item', methods=['UPDATE'])
+def catalog_item_upd():
+    token = request.cookies.get('session_token')
+    session = Session.get_by_token(token)
+    if not token or not session or not PlansBotUser.get_by_id(session.telegram_id).is_allowed("/edit_catalog"):
+        return {'success': False}
+    catalog_item_id = int(request.args.get('id'))
+    c_i = CatalogItem.get_by_id(catalog_item_id)
+    for k, v in request.json.items():
+        c_i.set_field(k, v)
+    return {'success': True}
+
+@app.route('/catalog_item', methods=['DELETE'])
+def catalog_item_del():
+    token = request.cookies.get('session_token')
+    session = Session.get_by_token(token)
+    if not token or not session or not PlansBotUser.get_by_id(session.telegram_id).is_allowed("/edit_catalog"):
+        return {'success': Fa   lse}
+    CatalogItem.delete_by_id(int(request.args.get('id')))
+    return {'success': True}
+
+@app.route('/catalog_item', methods=['CREATE'])
+def catalog_item_crt():
+    token = request.cookies.get('session_token')
+    session = Session.get_by_token(token)
+    if not token or not session or not PlansBotUser.get_by_id(session.telegram_id).is_allowed("/edit_catalog"):
+        return {'success': False}
+    c_i = CatalogItem.create()
+    act = SendMessageAction.create(f'Вы нажали на {c_i.text}')
+    c_i.add_action(act.id)
+    return {'success': True, **c_i.to_JSON()}
+
+
+@app.route('/action', methods=['GET'])
+def action():
+    token = request.cookies.get('session_token')
+    session = Session.get_by_token(token)
+    if not token or not session or not PlansBotUser.get_by_id(session.telegram_id).is_allowed("/edit_catalog"):
+        return {'success': False}
+    action_id = int(request.args.get('id'))
+    response = SendMessageAction.get_by_id(action_id).to_JSON()
+    response['success'] = True
+    return jsonify(response)
