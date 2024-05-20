@@ -178,7 +178,7 @@ def catalog_item_del():
     token = request.cookies.get('session_token')
     session = Session.get_by_token(token)
     if not token or not session or not PlansBotUser.get_by_id(session.telegram_id).is_allowed("/edit_catalog"):
-        return {'success': Fa   lse}
+        return {'success': False}
     CatalogItem.delete_by_id(int(request.args.get('id')))
     return {'success': True}
 
