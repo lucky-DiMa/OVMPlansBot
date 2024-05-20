@@ -1,0 +1,80 @@
+{%  extends "index.html" %}
+{% block main %}
+    <div id="catalog_items">
+        {%  for catalog_item in catalog_items %}
+            <div class="catalog_item" id="CI_{{ catalog_item.id }}">
+                <p>{{ catalog_item.text }}</p><span></span>
+            </div>
+        {% endfor %}
+        <div id="add_catalog_item_btn">
+            +
+        </div>
+    </div>
+    <script type="text/javascript">
+        async function edit_CI_text(event) {
+            let prev_text_element = event.target.parentElement.getElementsByClassName("catalog_item_text")[0];
+            let CI_id = event.target.parentElement.parentElement.id.slice(3, -7);
+            let new_text = prompt('Введите новый текст', prev_text_element.innerHTML);
+            if (new_text) {
+                let response = await (fetch('/catalog_item?id=' + CI_id, {method: "UPDATE", body: JSON.stringify({"text": new_text}),  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+                if (!response.success) location.reload();
+                prev_text_element.innerHTML = new_text;
+                document.querySelector('#CI_' + CI_id).innerHTML = new_text;
+            }
+        }
+
+        async function catalogItemsClick(event) {
+            let CI_ID = event.target.id.slice(3);
+            if (event.target.nodeName === "P") CI_ID = event.target.parentElement.id.slice(3);
+            let catalog_item = await (fetch('/catalog_item?id='+ CI_ID, {method: "GET",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+            if (!catalog_item.success) location.reload();
+            let actions = [];
+            for (const action_id of catalog_item.actions_ids) {
+                const response = await (fetch('/action?id='+ action_id.toString(), {method: "GET",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+                actions.push(response);
+            }
+            document.querySelectorAll(".editor_div").forEach((value) => value.remove());
+            document.querySelectorAll('.space_between_editors').forEach((value) => value.remove());
+            let main = document.querySelector('main')
+            const br = document.createElement("br");
+            br.classList.add('space_between_editors');
+            main.append(br);
+            let editor_div = document.createElement("div");
+            editor_div.classList.add("editor_div");
+            editor_div.classList.add("catalog_item_editor_div");
+            editor_div.id = "CI_" + catalog_item._id.toString() + "_editor"
+            let innerHTML = '<div class="catalog_item_text_editor"><h2 class="catalog_item_text">' + catalog_item.text + '</h2><button class="edit_catalog_item_text_btn">Изменить</button></div><fieldset class="action_choices"><legend>Действия:</legend>'
+            actions.forEach((action) => {
+                let action_type = '';
+                if (action.type === 'send_message') action_type = 'Отправка сообщения';
+                innerHTML += '<div class="action_radio_div radio_div" id="action_'+ action._id.toString() +'_radio_div"><input type="radio" class="radio_input action_radio" id="action_'+ action._id.toString() +'_radio"/><label class="radio_labal action_radio_label">' + action_type + '</label></div';
+            });
+            innerHTML += '</fieldset>';
+            editor_div.innerHTML = innerHTML;
+            main.append(editor_div);
+            document.querySelector("main #CI_" + catalog_item._id.toString() + "_editor .catalog_item_text_editor .edit_catalog_item_text_btn").addEventListener('click', edit_CI_text)
+        }
+
+        async function deleteCI(event) {
+            let catalog_item = await (fetch('/catalog_item?id='+ event.target.parentElement.id.slice(3), {method: "DELETE",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+            if (!catalog_item.success) location.reload();
+            event.target.parentElement.remove();
+        }
+
+        async function addCI(event) {
+            let catalog_item = await (fetch('/catalog_item', {method: "CREATE",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+            if (!catalog_item.success) location.reload();
+            let div = document.createElement('div');
+            div.classList.add('catalog_item');
+            div.id = 'CI_' + catalog_item._id.toString();
+            div.innerHTML = '<p>' + catalog_item.text + '</p><span></span>';
+            div.addEventListener('click', catalogItemsClick)
+            event.target.parentElement.insertBefore(div, event.target)
+            document.querySelector('#CI_' + catalog_item._id.toString() + ' span').addEventListener('click', deleteCI)
+        }
+        
+        document.querySelectorAll('.catalog_item').forEach((value) => value.addEventListener('click', catalogItemsClick));
+        document.querySelectorAll('.catalog_item span').forEach((value) => value.addEventListener('click', deleteCI));
+        document.querySelector('#add_catalog_item_btn').addEventListener('click', addCI);
+    </script>
+{% endblock %}
