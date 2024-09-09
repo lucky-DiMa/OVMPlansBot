@@ -118,3 +118,13 @@ class InlineButton:
     async def process_tap(self, user: PlansBotUser) -> None:
         for action in self.actions:
             await action.process(user)
+
+    def delete(self):
+        for action in self.actions:
+            action.delete()
+        self.__class__.delete_by_id(self.id)
+
+    @classmethod
+    def delete_by_id(cls, _id: int):
+        cls.collection.delete_one({'_id': _id})
+

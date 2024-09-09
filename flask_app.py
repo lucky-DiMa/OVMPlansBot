@@ -173,6 +173,15 @@ def catalog_item_upd():
         c_i.set_field(k, v)
     return {'success': True}
 
+
+@app.route('/catalog_items_order', methods=['UPDATE'])
+def catalog_items_order_upd():
+    token = request.cookies.get('session_token')
+    session = Session.get_by_token(token)
+    if not token or not session or not PlansBotUser.get_by_id(session.telegram_id).is_allowed("/edit_catalog"):
+        return {'success': False}
+    return {'success': CatalogItem.reorder_catalog_items_by_prev_catalog_item_text(request.json["order"], "main")}
+
 @app.route('/catalog_item', methods=['DELETE'])
 def catalog_item_del():
     token = request.cookies.get('session_token')
@@ -204,3 +213,15 @@ def action():
     response = SendMessageAction.get_by_id(action_id).to_JSON()
     response['success'] = True
     return jsonify(response)
+
+@app.route('/action', methods=['UPDATE'])
+def action_upd():
+    token = request.cookies.get('session_token')
+    session = Session.get_by_token(token)
+    if not token or not session or not PlansBotUser.get_by_id(session.telegram_id).is_allowed("/edit_catalog"):
+        return {'success': False}
+    action_id = int(request.args.get('id'))
+    action = SendMessageAction.get_by_id(action_id)
+    for k, v in request.json.items():
+        action.set_field(k, v)
+    return {'success': True}

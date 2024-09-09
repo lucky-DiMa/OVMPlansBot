@@ -144,4 +144,21 @@ class SendMessageAction:
         else:
             await user.send_message(self.message_text, markup=self.inline_keyboard_markup)
 
+    def delete(self):
+        self.__class__.delete_by_id(self.id, self)
+
+    @classmethod
+    def delete_by_id(cls, _id: int, obj: SendMessageAction | None = None) -> None:
+        if not obj:
+            obj = cls.get_by_id(_id)
+        for button in obj.keyboard:
+            button.delete()
+        cls.collection.delete_one({'_id': _id})
+
+    def set_field(self, field_name: str, value: Any) -> None:
+        self.__class__.set_field_by_id(self.id, field_name, value)
+
+    @classmethod
+    def set_field_by_id(cls, _id: int, field_name: str, value: Any) -> None:
+        cls.collection.update_one({"_id": _id}, {"$set": {field_name: value}})
 

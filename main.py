@@ -15,9 +15,6 @@ WEB_SERVER_PORT = 5000
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = str(randint(1, 1000000))
 
-session = Session.create(1358414277)
-print(session.token)
-
 async def on_startup_webhook() -> None:
     await bot.set_webhook(f"{BASE_WEBHOOK_URL}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
 

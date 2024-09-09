@@ -117,6 +117,7 @@ br {
     align-items: center;
     align-content: center;
     position: relative;
+    transition-duration: 0.2s;
 }
 
 .catalog_item:hover {
@@ -140,7 +141,7 @@ br {
     cursor: pointer;
 }
 
-.catalog_item_text_editor {
+.catalog_item_text_editor, .message_text_editor {
     display: flex;
     align-items: center;
     padding-left: 15px;
@@ -155,7 +156,7 @@ br {
     font-weight: normal;
 }
 
-.edit_catalog_item_text_btn {
+.edit_catalog_item_text_btn, .edit_message_text_btn {
     background: none;
     color: #305f8f;
     border: none;
@@ -164,11 +165,11 @@ br {
     transition-duration: 0.3s;
 }
 
-.edit_catalog_item_text_btn:hover {
+.edit_catalog_item_text_btn:hover, .edit_message_text_btn:hover {
     color: #4f41b8;
 }
 
-.catalog_item_editor_div {
+.editor_div {
     padding-left: 10px;
     padding-right: 10px;
 }
@@ -232,4 +233,61 @@ br {
     padding-right: 10px;
     width: 95%;
     text-align: center;
+}
+
+.message_text {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 60vw;
+    width: auto;
+    margin: 8px 0;
+}
+
+h3 {
+    margin: 0;
+}
+
+.dragging {
+    opacity: 0.7;
+    transform: scale(95%);
+}
+
+#loader-div {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-content: center;
+    align-items: center;
+    justify-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 100vw;
+    background-color: rgba(0, 0, 0, 50%);
+    z-index: 10;
+}
+
+#loader-circle-div {
+    width: 10vw;
+    height: 10vw;
+    border: white 3px solid;
+    border-radius: 100%;
+    border-top-color: #398691;
+    animation: loading_anim 1s infinite;
+}
+
+@keyframes loading_anim {
+    0% {
+        transform: rotate(0turn);
+    }
+
+    100% {
+        transform: rotate(1turn);
+    }
+}
+
+#loader-reason-div {
+    margin-top: 3vh;
+    font-size: 2vw;
 }

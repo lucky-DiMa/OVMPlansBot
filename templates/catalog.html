@@ -2,7 +2,7 @@
 {% block main %}
     <div id="catalog_items">
         {%  for catalog_item in catalog_items %}
-            <div class="catalog_item" id="CI_{{ catalog_item.id }}">
+            <div class="catalog_item" draggable="true" id="CI_{{ catalog_item.id }}">
                 <p>{{ catalog_item.text }}</p><span></span>
             </div>
         {% endfor %}
@@ -11,26 +11,97 @@
         </div>
     </div>
     <script type="text/javascript">
-        async function edit_CI_text(event) {
+        function create_actions_list_fieldset(actions_ids) {
+
+        }
+
+        function displayLoader(reason) {
+            document.querySelector('#loader-div').style.display = "flex";
+            document.querySelector('#loader-reason-div').innerHTML = reason + "...";
+        }
+
+        function hideLoader() {
+            document.querySelector('#loader-div').style.display = "none";
+        }
+
+        async function editCITextClick(event) {
             let prev_text_element = event.target.parentElement.getElementsByClassName("catalog_item_text")[0];
-            let CI_id = event.target.parentElement.parentElement.id.slice(3, -7);
+            let CI_ID = event.target.parentElement.parentElement.id.slice(3, -7);
             let new_text = prompt('Введите новый текст', prev_text_element.innerHTML);
-            if (new_text) {
-                let response = await (fetch('/catalog_item?id=' + CI_id, {method: "UPDATE", body: JSON.stringify({"text": new_text}),  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
-                if (!response.success) location.reload();
+            if (new_text && new_text !== prev_text_element.innerHTML) {
+                await updateCITextByID(CI_ID, new_text);
                 prev_text_element.innerHTML = new_text;
-                document.querySelector('#CI_' + CI_id).innerHTML = new_text;
+                document.querySelector('#CI_' + CI_ID).innerHTML = new_text;
             }
+        }
+        async function editMessageText(event) {
+            let prev_text_element = event.target.parentElement.getElementsByClassName("message_text")[0];
+            let A_id = event.target.parentElement.parentElement.id.slice(2, -7);
+            let new_text = prompt('Введите новый текст сообщения', prev_text_element.innerHTML);
+            if (new_text && new_text !== prev_text_element.innerHTML) {
+                await updateMessageTextByID(A_id, new_text)
+                prev_text_element.innerHTML = new_text;
+            }
+        }
+
+        async function actionChoice(e) {
+            if (!e.target.checked)  return;
+            const main = document.getElementsByTagName("main")[0];
+            let next_element = e.target.parentElement.parentElement.parentElement.nextElementSibling;
+            while (next_element) {
+                let rm_element = next_element;
+                next_element = next_element.nextElementSibling;
+                main.removeChild(rm_element);
+            }
+            const br = document.createElement("br");
+            br.classList.add('space_between_editors');
+            main.append(br);
+            e.target.id.slice(7, -10);
+            let action = await getActionByID(e.target.id.slice(7, -6));
+            console.log(action);
+            const editor_div = document.createElement("div");
+            editor_div.classList.add("editor_div", "action_editor");
+            editor_div.id = "A_" + action._id.toString() + "_editor";
+            let innerHTML  = '<h2 class="action_title">Отправка сообщения</h2>';
+            innerHTML += '<h3>Текст:</h3>';
+            innerHTML += '<div class="message_text_editor"><p class="message_text">' + action.message_text + '</p>';
+            innerHTML += '<button class="edit_message_text_btn" type="button">Изменить</button></div>';
+            editor_div.innerHTML = innerHTML;
+            editor_div.id = "A_" + action._id.toString() + "_editor";
+            main.append(editor_div);
+            document.querySelector("main #A_" + action._id.toString() + "_editor .message_text_editor .edit_message_text_btn").addEventListener('click', editMessageText)
+        }
+
+        async function getActionByID(action_id) {
+            displayLoader("Получение данных");
+            let response = await (fetch('/action?id='+ action_id.toString(), {method: "GET",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()})
+            if (!response.success) {
+                alert("По какой-то причине вам отказано в доступе, возможно у вас недостаточно прав или вы вышли из аккаунта");
+                location.reload();
+            }
+            hideLoader();
+            return response;
+        }
+
+        async function getCatalogItemByID(CI_ID) {
+            displayLoader("Получение данных");
+            let response = await (fetch('/catalog_item?id='+ CI_ID, {method: "GET",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+            if (!response.success) {
+                alert("По какой-то причине вам отказано в доступе, возможно у вас недостаточно прав или вы вышли из аккаунта");
+                location.reload();
+            }
+            hideLoader();
+            return response;
         }
 
         async function catalogItemsClick(event) {
             let CI_ID = event.target.id.slice(3);
             if (event.target.nodeName === "P") CI_ID = event.target.parentElement.id.slice(3);
-            let catalog_item = await (fetch('/catalog_item?id='+ CI_ID, {method: "GET",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
-            if (!catalog_item.success) location.reload();
+            if (CI_ID === '') return;
+            let catalog_item = await getCatalogItemByID(CI_ID);
             let actions = [];
             for (const action_id of catalog_item.actions_ids) {
-                const response = await (fetch('/action?id='+ action_id.toString(), {method: "GET",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+                const response = await getActionByID(action_id);
                 actions.push(response);
             }
             document.querySelectorAll(".editor_div").forEach((value) => value.remove());
@@ -52,29 +123,125 @@
             innerHTML += '</fieldset>';
             editor_div.innerHTML = innerHTML;
             main.append(editor_div);
-            document.querySelector("main #CI_" + catalog_item._id.toString() + "_editor .catalog_item_text_editor .edit_catalog_item_text_btn").addEventListener('click', edit_CI_text)
+            document.querySelector("main #CI_" + catalog_item._id.toString() + "_editor .catalog_item_text_editor .edit_catalog_item_text_btn").addEventListener('click', editCITextClick)
+            let radios = document.querySelectorAll("main #CI_" + catalog_item._id.toString() + "_editor fieldset .action_radio_div input");
+            radios.forEach((r) => {
+                r.addEventListener("change", actionChoice)
+            })
         }
 
-        async function deleteCI(event) {
-            let catalog_item = await (fetch('/catalog_item?id='+ event.target.parentElement.id.slice(3), {method: "DELETE",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
-            if (!catalog_item.success) location.reload();
+        async function deleteCiByID(catalog_item_id) {
+            displayLoader("Удаление");
+            let response = await (fetch('/catalog_item?id='+ catalog_item_id, {method: "DELETE",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+            if (!response.success) {
+                alert("По какой-то причине вам отказано в доступе, возможно у вас недостаточно прав или вы вышли из аккаунта");
+                location.reload();
+            }
+            hideLoader();
+        }
+
+        async function deleteCIButtonClick(event) {
+            await deleteCiByID(event.target.parentElement.id.slice(3));
             event.target.parentElement.remove();
         }
+        async function createCI() {
+            displayLoader("Добавление");
+            let response = await (fetch('/catalog_item', {method: "CREATE", headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+            if (!response.success) {
+                alert("По какой-то причине вам отказано в доступе, возможно у вас недостаточно прав или вы вышли из аккаунта");
+                location.reload();
+            }
+            hideLoader();
+            return response;
+        }
+        async function updateCITextByID(catalog_item_id, new_text) {
+            displayLoader("Сохранение");
+            let response = await (fetch('/catalog_item?id=' + catalog_item_id, {method: "UPDATE", body: JSON.stringify({"text": new_text}),  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+            if (!response.success) {
+                alert("По какой-то причине вам отказано в доступе, возможно у вас недостаточно прав или вы вышли из аккаунта");
+                location.reload();
+            }
+            hideLoader();
+            return response;
+        }
 
-        async function addCI(event) {
-            let catalog_item = await (fetch('/catalog_item', {method: "CREATE",  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
-            if (!catalog_item.success) location.reload();
+        async function updateMessageTextByID(action_id, new_text) {
+            displayLoader("Сохранение");
+            let response = await (fetch('/action?id=' + action_id, {method: "UPDATE", body: JSON.stringify({"message_text": new_text}),  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+            if (!response.success) {
+                alert("По какой-то причине вам отказано в доступе, возможно у вас недостаточно прав или вы вышли из аккаунта");
+                location.reload();
+            }
+            hideLoader();
+            return response;
+        }
+
+        async function addCIClick(event) {
+            let catalog_item = await createCI();
             let div = document.createElement('div');
+            div.draggable = true;
             div.classList.add('catalog_item');
             div.id = 'CI_' + catalog_item._id.toString();
             div.innerHTML = '<p>' + catalog_item.text + '</p><span></span>';
             div.addEventListener('click', catalogItemsClick)
             event.target.parentElement.insertBefore(div, event.target)
-            document.querySelector('#CI_' + catalog_item._id.toString() + ' span').addEventListener('click', deleteCI)
+            document.querySelector('#CI_' + catalog_item._id.toString() + ' span').addEventListener('click', deleteCIButtonClick)
+            document.querySelector('#CI_' + catalog_item._id.toString()).addEventListener('dragstart', dragStartBaseBehavior)
+            document.querySelector('#CI_' + catalog_item._id.toString()).addEventListener('dragend', dragEndCatalogItemBehavior)
         }
-        
+
+        async function updateCatalogItemsOrder(order) {
+            displayLoader("Сохранение");
+            let response = await (fetch('/catalog_items_order', {method: "UPDATE", body: JSON.stringify({"order": order}),  headers: {"Content-type": "application/json; charset=UTF-8"}})).then((response) => {return response.json()});
+            if (!response.success) {
+                alert("По какой-то причине вам отказано в доступе, возможно у вас недостаточно прав или вы вышли из аккаунта");
+                location.reload();
+            }
+            hideLoader();
+        }
+
+        function getCurrentCatalogItemsOrder() {
+            let order = [];
+            document.querySelectorAll(".catalog_item").forEach(catalog_item => {
+                order.push(Number(catalog_item.id.slice(3)));
+            })
+            return order;
+        }
+
+        function dragStartBaseBehavior(e) {
+            e.target.classList.add("dragging");
+        }
+
+        function dragEndBaseBehavior(e) {
+            e.target.classList.remove("dragging");
+        }
+
+        async function dragEndCatalogItemBehavior(e) {
+            dragEndBaseBehavior(e);
+            await updateCatalogItemsOrder(getCurrentCatalogItemsOrder());
+        }
+
+        function dragOverBaseBehavior(e) {
+            let currentElement = document.querySelector('.dragging');
+            let target = document.elementFromPoint(e.clientX, e.clientY);
+            if (target.classList.contains("catalog_item")) {
+                if (target === target.parentNode.firstElementChild) {
+                    currentElement.parentNode.insertBefore(currentElement, target);
+                }
+                else if (target.previousElementSibling.id === currentElement.id || target === target.parentNode.lastElementChild) {
+                    currentElement.parentNode.insertBefore(currentElement, target.nextElementSibling);
+                }
+                else {
+                    currentElement.parentNode.insertBefore(currentElement, target);
+                }
+            }
+        }
+
         document.querySelectorAll('.catalog_item').forEach((value) => value.addEventListener('click', catalogItemsClick));
-        document.querySelectorAll('.catalog_item span').forEach((value) => value.addEventListener('click', deleteCI));
-        document.querySelector('#add_catalog_item_btn').addEventListener('click', addCI);
+        document.querySelectorAll('.catalog_item').forEach((value) => value.addEventListener('dragstart', dragStartBaseBehavior));
+        document.querySelectorAll('#catalog_items').forEach((value) => value.addEventListener('dragover', dragOverBaseBehavior));
+        document.querySelectorAll('.catalog_item').forEach((value) => value.addEventListener('dragend', dragEndCatalogItemBehavior));
+        document.querySelectorAll('.catalog_item span').forEach((value) => value.addEventListener('click', deleteCIButtonClick));
+        document.querySelector('#add_catalog_item_btn').addEventListener('click', addCIClick);
     </script>
 {% endblock %}
