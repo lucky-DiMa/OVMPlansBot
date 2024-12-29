@@ -8,25 +8,25 @@ from mongo_connector import mongo_db
 
 class Plan:
     def __init__(self, user_id: int, text: str, date: str):
-        self.__user_id = user_id
-        self.__text = text
-        self.__date = date
+        self._user_id = user_id
+        self._text = text
+        self._date = date
 
     @property
     def text(self):
-        return self.__text
+        return self._text
 
     @property
     def user_id(self):
-        return self.__user_id
+        return self._user_id
 
     @property
     def date(self):
-        return self.__date
+        return self._date
 
     @text.setter
     def text(self, text: str):
-        self.__text = text
+        self._text = text
         mongo_db["Plans"].update_one({"$and": [{"user_id": self.user_id}, {"date": self.date}]},
                                      {"$set": {"text": text}})
 

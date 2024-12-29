@@ -6,11 +6,12 @@ from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import KeyboardBuilder, ReplyKeyboardBuilder
 
 from classes.plans_bot_user import UserNotFoundException, PermissionDeniedException
+from config import switch_holidays_key
 from cron import send_notifications
 from aiogram import types, F
 
 from check_message_types import is_command
-from classes import PlansBotUser, Plan, Email, State, CatalogItem
+from classes import PlansBotUser, Plan, Email, State, CatalogItem, AccessRequest
 from create_bot import router, bot
 from filters import StateFilter
 from mongo_connector import mongo_db
@@ -40,7 +41,7 @@ async def catalog_command(message: types.Message, user: PlansBotUser):
 
 async def start_command(message: types.Message, user: PlansBotUser):
     await message.delete()
-    await message.answer(f'Приветствую вас {user.fullname}!')
+    await message.answer(f'Приветствую вас <code>{user.fullname}</code>!', parse_mode='HTML')
 
 
 async def all_messages(message: types.Message, user: PlansBotUser):
@@ -220,6 +221,14 @@ async def cancel_command(message: types.Message, user: PlansBotUser):
     elif user.state in ['CHOOSING LOCATION', 'CHOOSING SECTION', 'TYPING FULLNAME']:
         PlansBotUser.delete_by_id(user.id)
         await message.answer('Регистрация отменена!')
+    elif user.state == 'WAITING FOR REG CONFIRMATION':
+        AccessRequest.get_waiting_by_user_id(user.id).cancel()
+        await message.answer('Запрос на регистрацию отозван!')
+    elif user.state.startswith('EDITING REG '):
+        request = AccessRequest.get_waiting_by_user_id(user.id)
+        msg = await user.send_message(await request.get_info(True), markup=AccessRequest.editing_keyboard())
+        user.state = "WAITING FOR REG CONFIRMATION"
+        user.id_of_message_promoter_to_type = msg.message_id
     else:
         user.state = 'NONE'
         await user.send_message('Действие отменено!')
@@ -248,9 +257,10 @@ async def unban_user_id_message(message: types.Message, user: PlansBotUser):
         return
     banned_user_fullname = user.get_banned_user_fullname_by_id(int(message.text))
     user.unban(int(message.text))
+    await user.delete_state_message()
     user.state = 'NONE'
     await message.delete()
-    await message.answer(f'Пользователь {banned_user_fullname} с ID <code>{message.text}</code> разблокирован!',
+    await message.answer(f'Пользователь <code>{banned_user_fullname}</code> с ID <code>{message.text}</code> разблокирован!',
                          parse_mode='HTML')
     await user.delete_state_message()
 
@@ -368,6 +378,37 @@ async def invite_command(message:types.Message):
                          parse_mode='HTML')
 
 
+async def requests_command(message:types.Message):
+    await message.delete()
+    requests = AccessRequest.get_waiting()
+    end: str
+    if (len(str(len(requests))) > 1 and str(len(requests))[-2] == "1") or int(str(len(requests))[-1]) > 4 or len(str(len(requests))[-1]) == 0:
+        end = "ов"
+    elif str(len(requests))[-1] == "1":
+        end = ""
+    else:
+        end = "a"
+    await message.answer(f'<b>{len(requests)}</b> запрос{end}, ожидающих ответа',
+                         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text=request.user_fullname, callback_data=f'VIEW REQUEST {request.id}')] for request in requests] + [[types.InlineKeyboardButton(text="↻ Обновить", callback_data="UPDATE REQUESTS")]]),
+                         parse_mode='HTML')
+
+
+async def new_reg_fullname_message(message: types.Message, user: PlansBotUser):
+    await message.delete()
+    request = AccessRequest.get_waiting_by_user_id(user.id)
+    user.fullname = message.text
+    request.user_fullname = message.text
+    user.state = "WAITING FOR REG CONFIRMATION"
+    await user.edit_state_message(await request.get_info(True), markup=AccessRequest.editing_keyboard())
+
+
+async def switch_holidays_command(message: types.Message):
+    switch_holidays_key()
+    await message.answer('Режим праздников включён, бот перезапускается...')
+    import os
+    os.system("bash main.sh")
+
+
 def reg_handlers():
     router.message.register(no, lambda message: message.chat.type in ['group', 'supergroup'])
     router.message.register(banned, lambda _, is_user_banned: is_user_banned)
@@ -375,26 +416,19 @@ def reg_handlers():
                             lambda _, user_exists: not user_exists,
                             F.text == '/start AAHIYqEo-le_LuKbbrrsXxLMmxwXmKi7zUM')
     router.message.register(no_access, lambda _, user_exists: not user_exists)
-    router.message.register(waiting_for_reg_confirmation,
-                            StateFilter('WAITING FOR REG CONFIRMATION'))
-    router.message.register(get_user_command, Command('get_user'), F.content_type == ContentType.TEXT,
-                            flags={"required_permissions": ["/get_user"]})
     router.message.register(cancel_command,
                             Command('cancel'),
                             F.content_type == ContentType.TEXT)
-    router.message.register(catalog_command,
-                            Command('catalog'),
-                            F.content_type == ContentType.TEXT)
-    router.message.register(my_data_command,
-                            Command('my_data'),
-                            F.content_type == ContentType.TEXT)
-    router.message.register(toggle_notifications_command,
-                            Command('toggle_notifications'),
-                            F.content_type == ContentType.TEXT)
+    router.message.register(waiting_for_reg_confirmation,
+                            StateFilter('WAITING FOR REG CONFIRMATION'))
     router.message.register(choose_location,
                             StateFilter('CHOOSING LOCATION'))
     router.message.register(choose_section,
                             StateFilter('CHOOSING SECTION'))
+    router.message.register(choose_location,
+                            StateFilter('EDITING REG LOCATION'))
+    router.message.register(choose_section,
+                            StateFilter('EDITING REG SECTION'))
     router.message.register(place_message,
                             StateFilter('TYPING PLACE ', startswith=True), F.content_type == ContentType.TEXT)
     router.message.register(start_work_date_after_vacation_message,
@@ -412,8 +446,21 @@ def reg_handlers():
     router.message.register(unban_user_id_message,
                             StateFilter('TYPING UNBAN USER ID'), F.content_type == ContentType.TEXT,
                             flags={"required_permissions": ["/unban"]})
+    router.message.register(new_reg_fullname_message,
+                            StateFilter('EDITING REG FULLNAME'), F.content_type == ContentType.TEXT)
     router.message.register(fullname_message,
                             StateFilter('TYPING FULLNAME'), F.content_type == ContentType.TEXT)
+    router.message.register(get_user_command, Command('get_user'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/get_user"]})
+    router.message.register(catalog_command,
+                            Command('catalog'),
+                            F.content_type == ContentType.TEXT)
+    router.message.register(my_data_command,
+                            Command('my_data'),
+                            F.content_type == ContentType.TEXT)
+    router.message.register(toggle_notifications_command,
+                            Command('toggle_notifications'),
+                            F.content_type == ContentType.TEXT)
     router.message.register(start_command, Command('start'), F.content_type == ContentType.TEXT)
     router.message.register(help_command, Command('help'), F.content_type == ContentType.TEXT)
     router.message.register(send_plan_command, Command('send_plan'), F.content_type == ContentType.TEXT)
@@ -429,7 +476,13 @@ def reg_handlers():
     router.message.register(emails_command,
                             Command('emails'), F.content_type == ContentType.TEXT,
                             flags={"required_permissions": ["/emails"]})
+    router.message.register(requests_command,
+                            Command('requests'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["responder"]})
     router.message.register(restart_command,
+                            Command('restart'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/restart"]})
+    router.message.register(switch_holidays_key,
                             Command('restart'), F.content_type == ContentType.TEXT,
                             flags={"required_permissions": ["/restart"]})
     router.message.register(notify_command,

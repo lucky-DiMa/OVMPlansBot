@@ -1,10 +1,13 @@
 from __future__ import annotations
 from datetime import date
+
+from aiogram.types import URLInputFile, FSInputFile
+
 from admin_permission import permissions
 from create_bot import bot
 from mongo_connector import mongo_db
 from aiogram import types
-from typing import NamedTuple, Any
+from typing import NamedTuple, Any, List
 
 
 class IsEditingResult(NamedTuple):
@@ -55,11 +58,13 @@ class BannedUserNotFoundException(Exception):
 class PlansBotUser:
     fields = ["id", "fullname", "state", "location", "section", "id_of_message_promoter_to_type", "is_admin",
               "is_owner", "receive_notifications", "able_to_switch_notifications", "current_catalog_menu"]
-    full_admin_permissions = {perm_name: True for perm_name in permissions.keys()}
-    default_admin_permissions = {perm_name: False for perm_name in permissions.keys()}
-
+    full_admin_permissions = {permission_name: True for permission_name in permissions.keys()}
+    default_admin_permissions = {permission_name: False for permission_name in permissions.keys()}
+    collection_name = "Users"
+    collection = mongo_db[collection_name]
+    
     @property
-    def editing_markup(self):
+    def editing_markup(self) -> types.InlineKeyboardMarkup:
         inline_kb = [[types.InlineKeyboardButton(text="Изменить ФИО", callback_data="EDIT USERS FULLNAME")],
                      [types.InlineKeyboardButton(text="Перенести в другой регион",
                                                  callback_data="EDIT USERS LOCATION")],
@@ -82,10 +87,10 @@ class PlansBotUser:
                       [types.InlineKeyboardButton(text="Завершить редактирование", callback_data="END EDITING USER")]]
         return types.InlineKeyboardMarkup(inline_keyboard=inline_kb)
 
-    def get_field(self, field_name: str):
-        return mongo_db["Users"].find_one({"id": self.id}, [field_name])[field_name]
+    def get_field(self, field_name: str) -> Any:
+        return self.collection.find_one({"id": self.id}, [field_name])[field_name]
 
-    def get_admin_permissions_editing_text(self, chosen_permission_name: str):
+    def get_admin_permissions_editing_text(self, chosen_permission_name: str) -> str:
         from classes import State
         text = f'Пользователь <code>{self.id}</code>:\n\nФИО: {self.fullname}\nРегион: {self.location}\nОтдел: {self.section}\nСтатус: {State.get_explanation(self.state)}\nОповещения: {"✅" if self.receive_notifications else "❌"}\nВозможность управлять оповещениями: {"✅" if self.able_to_switch_notifications else "❌"}\nАдмин: {"✅" if self.is_admin else "❌"}' + (
             f'\n\nПрава админа:' if self.is_admin else '')
@@ -98,7 +103,7 @@ class PlansBotUser:
                     text += f'\n{permission_text} - {"✅" if self_permissions[permission_name] else "❌"}'
         return text
 
-    def get_admin_permissions_editing_markup(self, chosen_permission_name: str):
+    def get_admin_permissions_editing_markup(self, chosen_permission_name: str) -> types.InlineKeyboardMarkup:
         previous_permission_name = list(permissions.keys())[list(permissions.keys()).index(chosen_permission_name)-1]
         next_permission_name = list(permissions.keys())[(list(permissions.keys()).index(chosen_permission_name)+1) % len(list(permissions.keys()))]
         return types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text='˄', callback_data=f'CHOOSE PERMISSION {previous_permission_name}')],
@@ -118,65 +123,65 @@ class PlansBotUser:
                  receive_notifications: bool = True,
                  able_to_switch_notifications: bool = False,
                  current_catalog_menu: str = 'main'):
-        self.__current_catalog_menu = current_catalog_menu
-        self.__able_to_switch_notifications = able_to_switch_notifications
-        self.__receive_notifications = receive_notifications
-        self.__is_owner = is_owner
-        self.__is_admin = is_admin
-        self.__id = tg_id
-        self.__fullname = fullname
-        self.__state = state
-        self.__location = location
-        self.__section = section
-        self.__id_of_message_promoter_to_type = id_of_message_promoter_to_type
+        self._current_catalog_menu = current_catalog_menu
+        self._able_to_switch_notifications = able_to_switch_notifications
+        self._receive_notifications = receive_notifications
+        self._is_owner = is_owner
+        self._is_admin = is_admin
+        self._id = tg_id
+        self._fullname = fullname
+        self._state = state
+        self._location = location
+        self._section = section
+        self._id_of_message_promoter_to_type = id_of_message_promoter_to_type
 
     @property
-    def id(self):
-        return self.__id
+    def id(self) -> int:
+        return self._id
 
     @property
-    def is_admin(self):
-        return self.__is_admin
+    def is_admin(self) -> bool:
+        return self._is_admin
 
     @property
-    def is_owner(self):
-        return self.__is_owner
+    def is_owner(self) -> bool:
+        return self._is_owner
 
     @property
-    def receive_notifications(self):
-        return self.__receive_notifications
+    def receive_notifications(self) -> bool:
+        return self._receive_notifications
 
     @property
-    def able_to_switch_notifications(self):
-        return self.__able_to_switch_notifications
+    def able_to_switch_notifications(self) -> bool:
+        return self._able_to_switch_notifications
 
     @property
-    def fullname(self):
-        return self.__fullname
+    def fullname(self) -> str:
+        return self._fullname
 
     @property
-    def state(self):
-        return self.__state
+    def state(self) -> str:
+        return self._state
 
     @property
-    def location(self):
-        return self.__location
+    def location(self) -> str:
+        return self._location
 
     @property
-    def section(self):
-        return self.__section
+    def section(self) -> str:
+        return self._section
 
     @property
-    def id_of_message_promoter_to_type(self):
-        return self.__id_of_message_promoter_to_type
+    def id_of_message_promoter_to_type(self) -> int:
+        return self._id_of_message_promoter_to_type
 
     @property
-    def current_catalog_menu(self):
-        return self.__current_catalog_menu
+    def current_catalog_menu(self) -> str:
+        return self._current_catalog_menu
 
-    def get_info(self, for_myself: bool = False):
+    def get_info(self, for_myself: bool = False) -> str:
         from classes import State
-        text = f'Пользователь <code>{self.id}</code>{"(Вы)" if for_myself else""}:\n\nФИО: {self.fullname}\nРегион: {self.location}\nОтдел: {self.section}\nСтатус: {State.get_explanation(self.state)}\nОповещения: {"✅" if self.receive_notifications else "❌"}\nВозможность управлять оповещениями: {"✅" if self.able_to_switch_notifications else "❌"}\nАдмин: {"✅" if self.is_admin else "❌"}' + (
+        text = f'Пользователь <code>{self.id}</code>{"(Вы)" if for_myself else""}:\n\nФИО: <code>{self.fullname}</code>\nРегион: <code>{self.location}</code>\nОтдел: <code>{self.section}</code>\nСтатус: <code>{State.get_explanation(self.state)}</code>\nОповещения: {"✅" if self.receive_notifications else "❌"}\nВозможность управлять оповещениями: {"✅" if self.able_to_switch_notifications else "❌"}\nАдмин: {"✅" if self.is_admin else "❌"}' + (
             f'\n\nПрава админа:' if self.is_admin else '')
         if self.is_admin:
             self_permissions = self.get_field('admin_permissions')
@@ -186,60 +191,59 @@ class PlansBotUser:
 
     @fullname.setter
     def fullname(self, fullname: str):
-        self.__fullname = fullname
-        mongo_db["Users"].update_one({"id": self.id}, {"$set": {"fullname": fullname}})
+        self.__set_field("fullname", fullname)
+        self._fullname = fullname
 
     @state.setter
     def state(self, state: str):
-        self.__state = state
-        mongo_db["Users"].update_one({"id": self.id}, {"$set": {"state": state}})
+        self.__set_field("state", state)
+        self._state = state
         if state == 'NONE':
             self.id_of_message_promoter_to_type = -1
 
     @location.setter
     def location(self, location: str):
-        self.__location = location
-        mongo_db["Users"].update_one({"id": self.id}, {"$set": {"location": location}})
+        self.__set_field("location", location)
+        self._location = location
 
     @section.setter
     def section(self, section: str):
-        self.__section = section
-        mongo_db["Users"].update_one({"id": self.id}, {"$set": {"section": section}})
+        self.__set_field("section", section)
+        self._section = section
 
     @id_of_message_promoter_to_type.setter
     def id_of_message_promoter_to_type(self, id_of_message_promoter_to_type: str):
-        self.__id_of_message_promoter_to_type = id_of_message_promoter_to_type
-        mongo_db["Users"].update_one({"id": self.id},
-                                     {"$set": {"id_of_message_promoter_to_type": id_of_message_promoter_to_type}})
+        self.__set_field("id_of_message_promoter_to_type", id_of_message_promoter_to_type)
+        self._id_of_message_promoter_to_type = id_of_message_promoter_to_type
 
     @is_admin.setter
     def is_admin(self, is_admin: bool):
-        self.__is_admin = is_admin
-        if self.__is_admin is is_admin:
+        if self._is_admin is is_admin:
             raise AdminAlreadyPromotedException(
                 f'User: "{self.fullname}" {self.id}') if is_admin else AdminAlreadyDismissedException(
                 f'User: "{self.fullname}" {self.id}')
-        mongo_db["Users"].update_one({"id": self.id}, {"$set": {"is_admin": is_admin}})
+        self.__set_field("is_admin", is_admin)
+        self.collection.update_one({"id": self._id},
+                                   {"$set": {"admin_permissions": self.__class__.default_admin_permissions}})
+        self._is_admin = is_admin
 
     @receive_notifications.setter
     def receive_notifications(self, receive_notifications: bool):
-        self.__receive_notifications = receive_notifications
-        mongo_db["Users"].update_one({"id": self.id}, {"$set": {"receive_notifications": receive_notifications}})
+        self._receive_notifications = receive_notifications
+        self.__set_field("receive_notifications", receive_notifications)
 
     @able_to_switch_notifications.setter
     def able_to_switch_notifications(self, able_to_switch_notifications: bool):
-        self.__able_to_switch_notifications = able_to_switch_notifications
-        mongo_db["Users"].update_one({"id": self.id},
-                                     {"$set": {"able_to_switch_notifications": able_to_switch_notifications}})
+        self.__set_field("able_to_switch_notifications", able_to_switch_notifications)
+        self._able_to_switch_notifications = able_to_switch_notifications
 
     @current_catalog_menu.setter
     def current_catalog_menu(self, current_catalog_menu: bool):
-        self.__current_catalog_menu = current_catalog_menu
-        mongo_db["Users"].update_one({"id": self.id},
-                                     {"$set": {"current_catalog_menu": current_catalog_menu}})
+        self.__set_field('current_catalog_menu', current_catalog_menu)
+        self._current_catalog_menu = current_catalog_menu
 
-    def is_allowed(self, permission_name: str):
-        return bool(mongo_db["Users"].find_one({"id": self.id})["admin_permissions"].get(permission_name, False))
+    def is_allowed(self, permission_name: str) -> bool:
+        return bool(self.collection.find_one({"id": self.id})["admin_permissions"].get(permission_name, False))
 
     def allow_permission(self, user_id: int, permission_name: str):
         if not self.is_owner:
@@ -260,9 +264,9 @@ class PlansBotUser:
         if user.is_allowed(permission_name):
             raise PermissionAlreadyAllowedException(f'User: {user_id}. Permission: {permission_name}.')
         if permission_name == 'choose_admins':
-            mongo_db["Users"].update_one({"id": user_id}, {"$set": {"admin_permissions": self.__class__.full_admin_permissions}})
+            self.__set_field_by_id(user_id, "admin_permissions", self.__class__.full_admin_permissions)
         else:
-            mongo_db["Users"].update_one({"id": user_id}, {"$set": {f"admin_permissions.{permission_name}": True}})
+            self.__set_field_by_id(user_id, f"admin_permissions.{permission_name}", True)
 
     def restrict_permission(self, user_id: int, permission_name: str):
         if not self.is_owner:
@@ -283,8 +287,8 @@ class PlansBotUser:
         if not user.is_allowed(permission_name):
             raise PermissionAlreadyRestrictedException(f'User: {user_id}. Permission: {permission_name}.')
         if permission_name != 'choose_admins':
-            mongo_db["Users"].update_one({"id": user_id}, {"$set": {f"admin_permissions.choose_admins": False}})
-        mongo_db["Users"].update_one({"id": user_id}, {"$set": {f"admin_permissions.{permission_name}": False}})
+            self.__class__.__set_field_by_id(user_id, "admin_permissions.choose_admins", False)
+        self.__class__.__set_field_by_id(user_id, f"admin_permissions.{permission_name}", False)
 
     def is_higher(self, user_id: int) -> bool:
         user = PlansBotUser.get_by_id(user_id)
@@ -319,17 +323,17 @@ class PlansBotUser:
         self.__class__.delete_by_id(user_id)
 
     @staticmethod
-    def exists_by_id(user_id: int):
+    def exists_by_id(user_id: int) -> bool:
         return mongo_db['Users'].find_one({'id': user_id}) is not None
 
     @classmethod
-    def registered_by_id(cls, user_id: int):
+    def registered_by_id(cls, user_id: int) -> bool:
         if not cls.exists_by_id(user_id):
             return False
         return cls.get_by_id(user_id).state not in ['CHOOSING LOCATION', 'CHOOSING SECTION', 'TYPING FULLNAME',
                                                     'WAITING FOR REG CONFIRMATION']
 
-    def registered(self):
+    def registered(self) -> bool:
         return self.state not in ['CHOOSING LOCATION', 'CHOOSING SECTION', 'TYPING FULLNAME',
                                   'WAITING FOR REG CONFIRMATION']
 
@@ -346,13 +350,8 @@ class PlansBotUser:
             if not self.is_higher(user_id):
                 raise PermissionDeniedException(
                     f'User: "{self.fullname}" {self.id}. Permission: choose_admins. Reason: user is admin and have this permission but he is lower than user {user_id}')
-        user = mongo_db['Users'].find_one({'id': user_id})
-        if user["is_admin"]:
-            raise AdminAlreadyPromotedException(f'Admin: "{user["fullname"]}" {user_id}')
-        mongo_db["Users"].update_one({"id": user_id},
-                                     {"$set": {"admin_permissions": self.__class__.default_admin_permissions}})
-        mongo_db["Users"].update_one({"id": user_id},
-                                     {"$set": {"is_admin": True}})
+        user = self.__class__.get_by_id(user_id)
+        user.is_admin = True
 
     def dismiss_admin(self, user_id: int):
         if not self.__class__.registered_by_id(user_id):
@@ -367,63 +366,28 @@ class PlansBotUser:
             if not self.is_higher(user_id):
                 raise PermissionDeniedException(
                     f'User: "{self.fullname}" {self.id}. Permission: choose_admins. Reason: user is admin and have this permission but he is lower than user {user_id}')
-        user = mongo_db['Users'].find_one({'id': user_id})
-        if not self.is_owner and user["admin_permissions"]["choose_admins"]:
-            raise PermissionDeniedException(
-                f'Admin: "{user["fullname"]}" {user["id"]}. Can not dismiss admin with choose_admins_permissions if dismisser is not owner.')
-        if not user["is_admin"]:
-            raise AdminAlreadyDismissedException(f'Admin: "{user["fullname"]}" {user_id}')
-        mongo_db["Users"].update_one({"id": user_id},
-                                     {"$set": {"admin_permissions": self.__class__.default_admin_permissions}})
-        mongo_db["Users"].update_one({"id": user_id},
-                                     {"$set": {"is_admin": False}})
+        user = self.__class__.get_by_id(user_id)
+        user.is_admin = False
 
     @classmethod
-    def reg(cls, tg_id: int):
+    def reg(cls, tg_id: int) -> PlansBotUser:
         """
         :rtype :PlansBotUser
         """
         if not cls.exists_by_id(tg_id):
             new_user = PlansBotUser(tg_id)
-            mongo_db["Users"].insert_one({"id": new_user.id,
-                                          "fullname": new_user.fullname,
-                                          "state": new_user.state,
-                                          "location": new_user.location,
-                                          "section": new_user.section,
-                                          "id_of_message_promoter_to_type": new_user.id_of_message_promoter_to_type,
-                                          "is_owner": new_user.is_owner,
-                                          "is_admin": new_user.is_admin,
-                                          "receive_notifications": new_user.receive_notifications,
-                                          "able_to_switch_notifications": new_user.able_to_switch_notifications,
-                                          "current_catalog_menu": new_user.current_catalog_menu,
-                                          "admin_permissions": PlansBotUser.default_admin_permissions
-                                          })
+            cls.collection.insert_one(new_user.to_JSON())
         return cls.get_by_id(tg_id)
 
     @classmethod
-    def from_json(cls, user_dict):
-        return cls(user_dict["id"],
-                   user_dict["fullname"],
-                   user_dict["state"],
-                   user_dict["location"],
-                   user_dict["section"],
-                   user_dict["id_of_message_promoter_to_type"],
-                   user_dict["is_admin"],
-                   user_dict["is_owner"],
-                   user_dict["receive_notifications"],
-                   user_dict["able_to_switch_notifications"],
-                   user_dict["current_catalog_menu"]
-                   )
-
-    @classmethod
-    def get_by_id(cls, tg_id: int):
+    def get_by_id(cls, tg_id: int) -> PlansBotUser:
         """
         :rtype :PlansBotUser
         """
-        user_dict = mongo_db["Users"].find_one({"id": tg_id}, cls.fields)
+        user_dict = cls.collection.find_one({"id": tg_id}, cls.fields)
         if user_dict is None:
             raise UserNotFoundException(f'ID: {tg_id}')
-        return cls.from_json(user_dict)
+        return cls.from_JSON(user_dict)
 
     async def send_message(self, text: str, reply_to_message_id: int | None = None,
                            markup: types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup | None = None):
@@ -433,8 +397,13 @@ class PlansBotUser:
         except:
             ...
 
+    async def send_message_with_no_try(self, text: str, reply_to_message_id: int | None = None,
+                           markup: types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup | None = None) -> types.Message:
+            return await bot.send_message(self.id, text, reply_to_message_id=reply_to_message_id, reply_markup=markup,
+                                          parse_mode='HTML')
+
     async def edit_state_message(self, text: str,
-                                 markup: types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup | None = None):
+                                 markup: types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup | None = None) -> types.Message:
         return await bot.edit_message_text(text, self.id, self.id_of_message_promoter_to_type, reply_markup=markup,
                                            parse_mode='HTML')
 
@@ -448,33 +417,33 @@ class PlansBotUser:
                 ...
 
     @classmethod
-    def get_users_that_not_sent_plans(cls, checking_date: date):
+    def get_users_that_not_sent_plans(cls, checking_date: date) -> List[PlansBotUser] | list:
         from classes import Plan
-        user_dicts = mongo_db["Users"].find({})
+        user_dicts = cls.collection.find({})
         users = []
         for user in user_dicts:
             if Plan.get_by_date_and_user_id(user["id"],
                                             f'{checking_date.day}.{checking_date.month}.{checking_date.year}') is None:
-                users.append(cls.from_json(user))
+                users.append(cls.from_JSON(user))
         return users
 
     @classmethod
-    def get_users_that_sent_plans(cls, checking_date: date):
+    def get_users_that_sent_plans(cls, checking_date: date) -> List[PlansBotUser] | list:
         from classes import Plan
-        user_dicts = mongo_db["Users"].find({})
+        user_dicts = cls.collection.find({})
         users = []
         for user in user_dicts:
             if Plan.get_by_date_and_user_id(user["id"],
                                             f'{checking_date.day}.{checking_date.month}.{checking_date.year}') is not None:
-                users.append(cls.from_json(user))
+                users.append(cls.from_JSON(user))
         return users
 
     @classmethod
-    def get_all(cls):
-        user_dicts = mongo_db["Users"].find({})
+    def get_all(cls) -> List[PlansBotUser] | list:
+        user_dicts = cls.collection.find({})
         users = []
         for user in user_dicts:
-            users.append(cls.from_json(user))
+            users.append(cls.from_JSON(user))
         return users
 
     @classmethod
@@ -482,7 +451,7 @@ class PlansBotUser:
         if not cls.exists_by_id(tg_id):
             raise UserNotFoundException(f'ID: {tg_id}')
         from classes import Plan
-        mongo_db["Users"].delete_one({"id": tg_id})
+        cls.collection.delete_one({"id": tg_id})
         Plan.delete_all_by_user_id(tg_id)
 
     @classmethod
@@ -512,26 +481,26 @@ class PlansBotUser:
 
     @classmethod
     def migrate(cls, new_field: str, default_value):
-        for user_dict in mongo_db["Users"].find({}):
+        for user_dict in cls.collection.find({}):
             if new_field not in user_dict.keys():
-                mongo_db["Users"].update_one({"id": user_dict["id"]}, {"$set": {new_field: default_value}})
+                cls.collection.update_one({"id": user_dict["id"]}, {"$set": {new_field: default_value}})
 
     @classmethod
     def migrate_add_new_permission(cls, new_perm: str):
-        for user_dict in mongo_db["Users"].find({}):
+        for user_dict in cls.collection.find({}):
             if "admin_permissions" in user_dict.keys() and new_perm not in user_dict["admin_permissions"].keys():
-                mongo_db["Users"].update_one({"id": user_dict["id"]}, {"$set": {f"admin_permissions.{new_perm}": user_dict["admin_permissions"]["choose_admins"]}})
+                cls.collection.update_one({"id": user_dict["id"]}, {"$set": {f"admin_permissions.{new_perm}": user_dict["admin_permissions"]["choose_admins"]}})
 
     @property
-    def is_editing_by_someone(self):
+    def is_editing_by_someone(self) -> IsEditingResult:
         user_json = mongo_db['Users'].find_one({"state": {"$regex": f"{self.id}$"}}, ["id"])
         if user_json:
-            return True, PlansBotUser.get_by_id(user_json["id"])
+            return IsEditingResult(True, PlansBotUser.get_by_id(user_json["id"]))
         return IsEditingResult(False, None)
 
-    def set_field(self, user_to_edit_id: int, field_name: str, value: Any):
+    def set_field(self, user_to_edit_id: int, field: str, value: Any):
         if not self.is_owner:
-            permission_name = f'edit_users_{field_name if field_name not in ["receive_notifications", "able_to_switch_notifications"] else "notifications"}'
+            permission_name = f'edit_users_{field if field not in ["receive_notifications", "able_to_switch_notifications"] else "notifications"}'
             if not self.is_admin:
                 raise PermissionDeniedException(
                     f'User: "{self.fullname}" {self.id}. Permission: {permission_name}. Reason: user is not admin.')
@@ -539,7 +508,7 @@ class PlansBotUser:
             if not self.is_higher(user_to_edit_id):
                 raise PermissionDeniedException(
                     f'User: "{self.fullname}" {self.id}. Permission: {permission_name}. Reason: user is admin and have this permission but he is lower than user {user_to_edit_id}')
-        mongo_db["Users"].update_one({"id": user_to_edit_id}, {"$set": {field_name: value}})
+        self.__class__.__set_field_by_id(user_to_edit_id, field, value)
 
     def unban(self, user_id: int):
         if not self.is_owner:
@@ -552,14 +521,14 @@ class PlansBotUser:
         self.__class__.unban_by_id(user_id)
 
     @staticmethod
-    def get_banned_user_fullname_by_id(user_id: int):
+    def get_banned_user_fullname_by_id(user_id: int) -> str:
         banned_user_dict = mongo_db["BannedUsers"].find_one({"id": user_id})
         if not banned_user_dict:
             raise BannedUserNotFoundException()
         return banned_user_dict["fullname"]
 
     @property
-    def help_message_text(self):
+    def help_message_text(self) -> str:
         text = 'Вот список команд доступных для вас:'
         from commands import commands
         self_permissions = self.get_field("admin_permissions")
@@ -573,3 +542,40 @@ class PlansBotUser:
                 text += f'\n{command_name} - {command_info.explanation}'
         return text
 
+    @classmethod
+    def get_responders(cls) -> List[PlansBotUser] | list:
+        return list(map(cls.from_JSON, cls.collection.find({"admin_permissions.responder": True})))
+
+    def to_JSON(self) -> dict:
+        return {field: self.__getattribute__(field) for field in self.__class__.fields}
+
+    @classmethod
+    def from_JSON(cls, data: dict) -> PlansBotUser:
+        return cls(*[data[field] for field in cls.fields])
+
+    def __set_field(self, field: str, value: Any):
+        self.__class__.__set_field_by_id(self._id, field, value)
+
+    @classmethod
+    def __set_field_by_id(cls, _id: int, field: str, value: Any):
+        cls.collection.update_one({"id": _id}, {"$set": {field: value}})
+
+    async def send_photo(self, document: types.FSInputFile | types.URLInputFile, caption:  str, reply_to_message_id: int | None = None, reply_markup: types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup | None = None):
+        await bot.send_photo(self.id, document, caption=caption, parse_mode="HTML", reply_markup=reply_markup,
+                             reply_to_message_id=reply_to_message_id)
+
+    async def send_video(self, document: types.FSInputFile | types.URLInputFile, caption:  str, reply_to_message_id: int | None = None, reply_markup: types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup | None = None):
+        await bot.send_video(self.id, document, caption=caption, parse_mode="HTML", reply_markup=reply_markup,
+                             reply_to_message_id=reply_to_message_id)
+
+    async def send_audio(self, document: types.FSInputFile | types.URLInputFile, caption:  str, reply_to_message_id: int | None = None, reply_markup: types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup | None = None):
+        await bot.send_audio(self.id, document, caption=caption, parse_mode="HTML", reply_markup=reply_markup,
+                             reply_to_message_id=reply_to_message_id)
+
+    async def send_document(self, document: types.FSInputFile | types.URLInputFile, caption:  str, reply_to_message_id: int | None = None, reply_markup: types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup | None = None):
+        await bot.send_document(self.id, document, caption=caption, parse_mode="HTML", reply_markup=reply_markup,
+                                reply_to_message_id=reply_to_message_id)
+
+    async def send_media_group(self, media_list: List[types.InputMediaAudio | types.InputMediaDocument | types.InputMediaPhoto | types.InputMediaVideo], reply_to_message_id: int | None = None):
+        await bot.send_media_group(self.id, media_list,
+                                   reply_to_message_id=reply_to_message_id)

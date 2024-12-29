@@ -12,28 +12,28 @@ class Email:
 
     def __init__(self, address: str, send_all: bool,
                  locations: List[str]):
-        self.__send_all = send_all
-        self.__address = address
-        self.__locations = locations
+        self._send_all = send_all
+        self._address = address
+        self._locations = locations
 
     @property
     def send_all(self):
-        return self.__send_all
+        return self._send_all
 
     @property
     def address(self):
-        return self.__address
+        return self._address
 
     @property
     def locations(self):
-        return self.__locations
+        return self._locations
 
     @address.setter
     def address(self, address: str):
         if self.__class__.exists(address):
             return
         self.collection.update_one({"address": self.address}, {"$set": {"address": address}})
-        self.__address = address
+        self._address = address
 
     @send_all.setter
     def send_all(self, send_all: bool):
@@ -41,14 +41,14 @@ class Email:
             return
         if send_all:
             self.collection.update_one({"address": self.address}, {"$set": {"locations": mongo_db["Locations"].find_one({})["list"]}})
-            self.__locations = mongo_db["Locations"].find_one({})["list"]
+            self._locations = mongo_db["Locations"].find_one({})["list"]
         if not send_all:
-            self.__locations = []
+            self._locations = []
             self.collection.update_one({"address": self.address}, {"$set": {"locations": []}})
         self.set_send_all(send_all)
 
     def set_send_all(self, send_all: bool):
-        self.__send_all = send_all
+        self._send_all = send_all
         self.collection.update_one({"address": self.address}, {"$set": {"send_all": send_all}})
 
     @property
@@ -69,14 +69,14 @@ class Email:
         new_locations = copy(self.locations)
         new_locations.append(location)
         self.collection.update_one({"address": self.address}, {"$set": {"locations": new_locations}})
-        self.__locations = new_locations
+        self._locations = new_locations
 
     def remove_location(self, location: str):
         self.set_send_all(False)
         new_locations = copy(self.locations)
         new_locations.remove(location)
         self.collection.update_one({"address": self.address}, {"$set": {"locations": new_locations}})
-        self.__locations = new_locations
+        self._locations = new_locations
 
     @classmethod
     def exists(cls, address: str):

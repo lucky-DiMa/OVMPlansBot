@@ -1,7 +1,9 @@
 from aiogram.exceptions import TelegramForbiddenError
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from classes.access_request import ResponseException
 
 from admin_permission import permissions
-from classes import PlansBotUser, Email
+from classes import PlansBotUser, Email, AccessRequest
 from aiogram import types, F
 from classes import Plan
 from classes.inline_button import InlineButton, ButtonCallbackData
@@ -83,51 +85,54 @@ async def typing_fullname(query: types.CallbackQuery):
     await query.answer('Сначала напишите своё ФИО', True)
 
 
-async def callback_for_accept_reg_button(query: types.CallbackQuery):
-    reg_user = PlansBotUser.get_by_id(int(query.data.split()[-1]))
-    if reg_user is None:
-        await query.answer('Запрос уже отклонен!', True)
+async def callback_for_accept_reg_button(query: types.CallbackQuery, user: PlansBotUser):
+    request = AccessRequest.get_by_id(int(query.data.split()[-1]))
+    request_message_id = PlansBotUser.get_by_id(request.user_id).id_of_message_promoter_to_type
+    try:
+        request.accept(user.id)
+    except ResponseException:
+        await query.answer(
+            "Запрос уже, принят, отклонён или отменён отправителем! Чтобы узнать подробнее, обновите информацию!", True)
         return
-    if reg_user.state != 'WAITING FOR REG CONFIRMATION':
-        await query.answer('Запрос уже принят!', True)
-        return
-    reg_user.state = 'NONE'
+    reg_user = PlansBotUser.get_by_id(request.user_id)
     await query.answer('Запрос принят успешно!', True)
     await query.message.delete()
-    await query.message.answer(f'Вы приняли запрос доступа к боту от {reg_user.fullname}')
+    await query.message.answer(f'Вы приняли запрос доступа к боту от <code>{reg_user.fullname}</code>', parse_mode="HTML")
     await reg_user.send_message('Ваш запрос на регистрацию был принят!')
     await reg_user.send_message(
-        f'Приветствую вас {reg_user.fullname}!')
+        f'Приветствую вас <code>{reg_user.fullname}!</code>')
+    await bot.delete_message(reg_user.id, request_message_id)
 
 
-async def callback_for_decline_reg_button(query: types.CallbackQuery):
-    reg_user = PlansBotUser.get_by_id(int(query.data.split()[-1]))
-    if reg_user is None:
-        await query.answer('Запрос уже отклонен!', True)
+async def callback_for_reject_reg_button(query: types.CallbackQuery, user: PlansBotUser):
+    request = AccessRequest.get_by_id(int(query.data.split()[-1]))
+    reg_user = PlansBotUser.get_by_id(request.user_id)
+    try:
+        request.reject(user.id)
+    except ResponseException:
+        await query.answer(
+            "Запрос уже, принят, отклонён или отменён отправителем! Чтобы узнать подробнее, обновите информацию!", True)
         return
-    if reg_user.state != 'WAITING FOR REG CONFIRMATION':
-        await query.answer('Запрос уже принят!', True)
-        return
-    PlansBotUser.delete_by_id(reg_user.id)
     await query.answer('Запрос отклонён успешно!', True)
     await query.message.delete()
+    await reg_user.delete_state_message()
     await query.message.answer(f'Вы отклонили запрос доступа к боту от {reg_user.fullname}')
     await reg_user.send_message('Ваш запрос на регистрацию был отклонён!')
 
 
-async def callback_for_ban_reg_button(query: types.CallbackQuery):
-    reg_user = PlansBotUser.get_by_id(int(query.data.split()[-1]))
-    if reg_user is None:
-        await query.answer('Запрос уже отклонен!', True)
+async def callback_for_ban_reg_button(query: types.CallbackQuery, user: PlansBotUser):
+    request = AccessRequest.get_by_id(int(query.data.split()[-1]))
+    reg_user = PlansBotUser.get_by_id(request.user_id)
+    try:
+        request.reject_and_ban(user.id)
+    except ResponseException:
+        await query.answer("Запрос уже, принят, отклонён или отменён отправителем! Чтобы узнать подробнее, обновите информацию!", True)
         return
-    if reg_user.state != 'WAITING FOR REG CONFIRMATION':
-        await query.answer('Запрос уже принят!', True)
-        return
-    PlansBotUser.ban_by_id(reg_user.id)
     await query.answer('Запрос отклонён успешно!', True)
     await query.message.delete()
     await query.message.answer(
         f'Вы отклонили запрос доступа к боту от {reg_user.fullname}\nВы успешно заблокировали исходящие запросы от {reg_user.fullname}\nID: {reg_user.id}\nЧто бы разблокировать напишите команду /unban')
+    await reg_user.delete_state_message()
     await reg_user.send_message(
         f'Ваш запрос на регистрацию был отклонён! Вы были заблокированы для разблокировки передайте ваш ID руководству\nID: {reg_user.id}')
 
@@ -180,15 +185,23 @@ async def callback_for_set_location_buttons(query: types.CallbackQuery, user: Pl
 async def callback_for_set_section_buttons(query: types.CallbackQuery, user: PlansBotUser):
     user.state = 'WAITING FOR REG CONFIRMATION'
     user.section = query.data.split(' - ')[1]
-    await bot.send_message(1358414277,
-                           f'Запрос на доступ к боту от {user.fullname}\nВыбранный регион: {user.location}\nВыбранный отдел: {user.section}\nИнформация об аккаунте в Telegram:\nID: {user.id}\nПолное имя: {query.from_user.full_name}\nUsername: {f"@{query.from_user.username}" if query.from_user.username else "не указан"}',
-                           reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-                               [types.InlineKeyboardButton(text='Принять', callback_data=f'ACCEPT REG {user.id}'),
-                                types.InlineKeyboardButton(text='Отклонить', callback_data=f'DECLINE REG {user.id}')],
-                               [types.InlineKeyboardButton(text=f'Заблокировать {query.from_user.full_name}',
-                                                           callback_data=f'BAN {user.id}')]]))
-    await query.message.answer('Запрос на получение доступа к боту был отправлен!')
+    request = AccessRequest.create(user)
+    # await bot.send_message(1358414277,
+    #                        f'Запрос на доступ к боту от {user.fullname}\nВыбранный регион: {user.location}\nВыбранный отдел: {user.section}\nИнформация об аккаунте в Telegram:\nID: {user.id}\nПолное имя: {query.from_user.full_name}\nUsername: {f"@{query.from_user.username}" if query.from_user.username else "не указан"}',
+    #                        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+    #                            [types.InlineKeyboardButton(text='Принять', callback_data=f'ACCEPT REG {user.id}'),
+    #                             types.InlineKeyboardButton(text='Отклонить', callback_data=f'REJECT REG {user.id}')],
+    #                            [types.InlineKeyboardButton(text=f'Заблокировать {query.from_user.full_name}',
+    #                                                        callback_data=f'BAN {user.id}')]]))
+    msg = await query.message.answer(await request.get_info(True),
+                               reply_markup=AccessRequest.editing_keyboard(), parse_mode='HTML')
+    user.id_of_message_promoter_to_type = msg.message_id
     await query.message.delete()
+    for admin in PlansBotUser.get_responders():
+        await admin.send_message(f"Поступил новый запрос к боту от <code>{request.user_fullname}</code>.\nВсего <b>{len(AccessRequest.get_waiting())}</b> запросов, ожидающих подтверждения.",
+                                 markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text=f'Посмотреть запрос от {request.user_fullname}',
+                                                               callback_data=f'VIEW REQUEST {request.id}')],
+                                                                                    [types.InlineKeyboardButton(text="Посмотреть все запросы", callback_data="UPDATE REQUESTS")]]))
 
 
 async def choosing_location(query: types.CallbackQuery):
@@ -289,9 +302,9 @@ async def callback_for_edit_user_button(query: types.CallbackQuery, user: PlansB
     is_editing_tuple = user_to_edit.is_editing_by_someone
     if is_editing_tuple.is_editing:
         await query.answer(
-            f'В данный момент {is_editing_tuple.who_is_editing.fullname} редактирует этого пользователя, во избежании визуальных конфликтных ситуаций редактирование одново пользователя немколькими другими одновременно запрецено!',
+            f'В данный момент {is_editing_tuple.who_is_editing.fullname} редактирует этого пользователя, во избежании визуальных конфликтных ситуаций редактирование одного пользователя несколькими другими одновременно запрещено!',
             True)
-        await query.message.answer(f'В данный момент {is_editing_tuple.who_is_editing.fullname} редактирует этого пользователя, во избежании визуальных конфликтных ситуаций редактирование одново пользователя немколькими другими одновременно запрецено!\n\nТак как вы имеете больше полномочий, чем {is_editing_tuple.who_is_editing.fullname}, поэтому вы можете прервать его действие!',
+        await query.message.answer(f'В данный момент {is_editing_tuple.who_is_editing.fullname} редактирует этого пользователя, во избежании визуальных конфликтных ситуаций редактирование одного пользователя несколькими другими одновременно запрецено!\n\nТак как вы имеете больше полномочий, чем {is_editing_tuple.who_is_editing.fullname}, поэтому вы можете прервать его действие!',
                                    reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text='Прервать', callback_data=f'CANCEL EDITING USER {user_to_edit.id} FROM {is_editing_tuple.who_is_editing.id}')]]))
         return
     await query.message.edit_text(text=user_to_edit.get_info(), reply_markup=user_to_edit.editing_markup, parse_mode='HTML')
@@ -316,7 +329,7 @@ async def callback_for_edit_users_fullname_button(query: types.CallbackQuery, us
         return
     await user.delete_state_message()
     msg = await query.message.answer(
-        text=f'Введите новое ФИО для пользователя <code>{user.state.split()[-1]}</code>, {user_to_edit.fullname}',
+        text=f'Введите новое ФИО для пользователя <code>{user.state.split()[-1]}</code>, <code>{user_to_edit.fullname}</code>',
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text='<< Назад >>', callback_data='CANCEL EDITING USERS FULLNAME')]]))
@@ -355,10 +368,11 @@ async def callback_for_set_users_is_admin_button(query: types.CallbackQuery, use
 
 async def callback_for_ban_user_button(query: types.CallbackQuery, user: PlansBotUser):
     try:
-        user.ban(int(user.state.split()[-1]))
-        banned_user_fullname = PlansBotUser.get_banned_user_fullname_by_id(int(user.state.split()[-1]))
+        banned_user_id = int(user.state.split()[-1])
+        user.ban(banned_user_id)
+        banned_user_fullname = PlansBotUser.get_banned_user_fullname_by_id(banned_user_id)
         user.state = 'NONE'
-        await query.message.edit_text(f"Пользователь {banned_user_fullname} c ID {int(user.state    .split()[-1])} успешно заблокирован используйте /unban для разблокировки")
+        await query.message.edit_text(f"Пользователь <code>{banned_user_fullname}</code> c ID <code>{banned_user_id}</code> успешно заблокирован используйте /unban для разблокировки", parse_mode="HTML")
         await query.message.delete_reply_markup()
     except PermissionDeniedException:
         user_to_ban = PlansBotUser.get_by_id(int(query.split()[-1]))
@@ -378,7 +392,7 @@ async def callback_for_edit_users_location_button(query: types.CallbackQuery, us
     kb.append([types.InlineKeyboardButton(text='<< Назад >>', callback_data='CANCEL EDITING USERS LOCATION')])
     markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
     await query.message.edit_text(
-        text=f'Выберите новый регион для пользователя <code>{user.state.split()[-1]}</code>, {user_to_edit.fullname}',
+        text=f'Выберите новый регион для пользователя <code>{user.state.split()[-1]}</code>, <code>{user_to_edit.fullname}</code>',
         parse_mode='HTML',
         reply_markup=markup)
     user.state = f'EDITING USERS LOCATION {user.state.split()[-1]}'
@@ -418,7 +432,7 @@ async def callback_for_edit_users_section_button(query: types.CallbackQuery, use
     kb.append([types.InlineKeyboardButton(text='<< Назад >>', callback_data='CANCEL EDITING USERS SECTION')])
     markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
     await query.message.edit_text(
-        text=f'Выберите новый отдел для пользователя <code>{user.state.split()[-1]}</code>, {user_to_edit.fullname}',
+        text=f'Выберите новый отдел для пользователя <code>{user.state.split()[-1]}</code>, <code>{user_to_edit.fullname}</code>',
         parse_mode='HTML',
         reply_markup=markup)
     user.state = f'EDITING USERS SECTION {user.state.split()[-1]}'
@@ -546,11 +560,95 @@ async def buttons_callback(query: types.CallbackQuery, user: PlansBotUser, callb
     await (InlineButton.get_by_id(callback_data.button_id)).process_tap(user)
 
 
+async def callback_for_edit_reg_data_buttons(query: types.CallbackQuery, user: PlansBotUser):
+    await query.answer()
+    editing_field = query.data.split()[-1]
+    user.state = f'EDITING REG {editing_field}'
+    cancel_button = InlineKeyboardButton(text="<< ОТМЕНА >>", callback_data=f"CANCEL EDITING REG {editing_field}")
+    kb = []
+    msg_text = ''
+    if editing_field == 'FULLNAME':
+        msg_text = "Введите верное ФИО:"
+    elif editing_field == 'LOCATION':
+        msg_text = "Выберете правильный регион:"
+        kb = [[types.InlineKeyboardButton(text=location, callback_data=f"SET REG LOC - {location}")] for location in mongo_db["Locations"].find_one({})["list"]]
+    elif editing_field == 'SECTION':
+        msg_text = "Выберете правильный отдел:"
+        kb = [[types.InlineKeyboardButton(text=location, callback_data=f"SET REG SEC - {location}")] for location in mongo_db["Sections"].find_one({})["list"]]
+    kb.append([cancel_button])
+    await query.message.edit_text(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
+
+async def callback_for_set_reg_loc_buttons(query: types.CallbackQuery, user: PlansBotUser):
+    await query.answer()
+    location = query.data.split(' - ')[-1]
+    user.location = location
+    request = AccessRequest.get_waiting_by_user_id(user.id)
+    request.user_location = location
+    user.state = 'WAITING FOR REG CONFIRMATION'
+    await query.message.edit_text(await request.get_info(True), parse_mode='HTML', reply_markup=AccessRequest.editing_keyboard())
+
+
+async def callback_for_set_reg_sec_buttons(query: types.CallbackQuery, user: PlansBotUser):
+    await query.answer()
+    section = query.data.split(' - ')[-1]
+    user.section = section
+    request = AccessRequest.get_waiting_by_user_id(user.id)
+    request.user_section = section
+    user.state = 'WAITING FOR REG CONFIRMATION'
+    await query.message.edit_text(await request.get_info(True), parse_mode='HTML', reply_markup=AccessRequest.editing_keyboard())
+
+async def callback_for_cancel_editing_reg_data_button(query: types.CallbackQuery, user: PlansBotUser):
+    await query.answer()
+    user.state = "WAITING FOR REG CONFIRMATION"
+    request = AccessRequest.get_waiting_by_user_id(user.id)
+    await query.message.edit_text(await request.get_info(True), parse_mode='HTML', reply_markup=AccessRequest.editing_keyboard())
+
+
+async def callback_for_cancel_reg_button(query: types.CallbackQuery, user: PlansBotUser):
+    await query.answer()
+    await user.delete_state_message()
+    AccessRequest.get_waiting_by_user_id(user.id).cancel()
+    await user.send_message_with_no_try("Запрос на регистрацию отозван!")
+
+async def callback_for_view_request_buttons(query: types.CallbackQuery):
+    request = AccessRequest.get_by_id(int(query.data.split()[-1]))
+    try:
+        await query.message.edit_text(await request.get_info(False), reply_markup=request.responding_keyboard(),
+                                      parse_mode='HTML')
+    except:
+        await query.answer("Данные обновлены")
+    else:
+        await query.answer()
+
+
+async def callback_for_update_requests_button(query: types.CallbackQuery, user: PlansBotUser):
+    requests = AccessRequest.get_waiting()
+    end: str
+    if (len(str(len(requests))) > 1 and str(len(requests))[-2] == "1") or int(str(len(requests))[-1]) > 4 or len(
+            str(len(requests))[-1]) == 0:
+        end = "ов"
+    elif str(len(requests))[-1] == "1":
+        end = ""
+    else:
+        end = "a"
+    try:
+        await query.message.edit_text(f'<b>{len(requests)}</b> запрос{end}, ожидающих ответа',
+                             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text=request.user_fullname, callback_data=f'VIEW REQUEST {request.id}')] for request in requests] + [[types.InlineKeyboardButton(text="↻ Обновить", callback_data="UPDATE REQUESTS")]]),
+                             parse_mode='HTML')
+    except:
+        await query.answer("Данные обновлены")
+    else:
+        await query.answer()
+
+
 def reg_handlers():
     router.callback_query.register(banned, lambda _, is_user_banned: is_user_banned)
     router.callback_query.register(callback_for_join_button, F.data == 'JOIN')
     router.callback_query.register(no_access, lambda _, user_exists: not user_exists)
-    router.callback_query.register(waiting_for_reg_confirmation, StateFilter(   'WAITING FOR REG CONFIRMATION'))
+    router.callback_query.register(waiting_for_reg_confirmation, StateFilter('WAITING FOR REG CONFIRMATION'), lambda query: query.data != 'CANCEL REG' and not query.data.startswith('EDIT REG '))
+    router.callback_query.register(choosing_location, StateFilter('EDITING REG LOCATION'), lambda query: query.data != 'CANCEL EDITING REG LOCATION' and not query.data.startswith('SET REG LOC - '))
+    router.callback_query.register(choosing_section, StateFilter('EDITING REG SECTION'), lambda query: query.data != 'CANCEL EDITING REG SECTION' and not query.data.startswith('SET REG SEC - '))
+    router.callback_query.register(typing_fullname, StateFilter('EDITING REG FULLNAME'), lambda query: query.data != 'CANCEL EDITING REG FULLNAME')
     router.callback_query.register(typing_fullname,
                                    lambda query: PlansBotUser.get_by_id(query.from_user.id).state == 'TYPING FULLNAME')
     router.callback_query.register(choosing_location, StateFilter('CHOOSING LOCATION'),
@@ -563,6 +661,12 @@ def reg_handlers():
                                    ButtonCallbackData.filter())
     router.callback_query.register(callback_for_send_in_office_plan_button,
                                    lambda query: query.data.startswith('SEND IN OFFICE PLAN'))
+    router.callback_query.register(callback_for_update_requests_button,
+                                   F.data == 'UPDATE REQUESTS',
+                                   flags={"required_permissions": ["responder"]})
+    router.callback_query.register(callback_for_view_request_buttons,
+                                   lambda query: query.data.startswith('VIEW REQUEST '),
+                                   flags={"required_permissions": ["responder"]})
     router.callback_query.register(callback_for_send_place_button,
                                    lambda query: query.data.startswith('SEND PLACE WHERE YOU WILL BE'),
                                    flags={"state_filter": StateFilter('NONE'),
@@ -593,6 +697,41 @@ def reg_handlers():
                                           "state_filter": StateFilter('EDITING EMAIL',
                                                                       startswith=True),
                                           "state_error_message": "Вы сейчас не редактируете почту!"})
+    router.callback_query.register(callback_for_edit_reg_data_buttons,
+                                   lambda query: query.data.startswith('EDIT REG '),
+                                   flags={"check_state_message": True,
+                                          "state_filter": StateFilter('WAITING FOR REG CONFIRMATION'),
+                                          "state_error_message": "Вы сейчас не ожидаете подтверждения регистрации!"})
+    router.callback_query.register(callback_for_cancel_reg_button,
+                                   F.data == "CANCEL REG",
+                                   flags={"check_state_message": True,
+                                          "state_filter": StateFilter('WAITING FOR REG CONFIRMATION'),
+                                          "state_error_message": "Вы сейчас не ожидаете подтверждения регистрации!"})
+    router.callback_query.register(callback_for_set_reg_loc_buttons,
+                                   lambda query: query.data.startswith('SET REG LOC - '),
+                                   flags={"check_state_message": True,
+                                          "state_filter": StateFilter('EDITING REG LOCATION'),
+                                          "state_error_message": "Вы сейчас изменяете регион в запросе на регистрацию!"})
+    router.callback_query.register(callback_for_set_reg_sec_buttons,
+                                   lambda query: query.data.startswith('SET REG SEC - '),
+                                   flags={"check_state_message": True,
+                                          "state_filter": StateFilter('EDITING REG SECTION'),
+                                          "state_error_message": "Вы сейчас изменяете отдел в запросе на регистрацию!"})
+    router.callback_query.register(callback_for_cancel_editing_reg_data_button,
+                                   F.data == "CANCEL EDITING REG LOCATION",
+                                   flags={"check_state_message": True,
+                                          "state_filter": StateFilter('EDITING REG LOCATION'),
+                                          "state_error_message": "Вы сейчас изменяете регион в запросе на регистрацию!"})
+    router.callback_query.register(callback_for_cancel_editing_reg_data_button,
+                                   F.data == "CANCEL EDITING REG SECTION",
+                                   flags={"check_state_message": True,
+                                          "state_filter": StateFilter('EDITING REG SECTION'),
+                                          "state_error_message": "Вы сейчас изменяете отдел в запросе на регистрацию!"})
+    router.callback_query.register(callback_for_cancel_editing_reg_data_button,
+                                   F.data == "CANCEL EDITING REG FULLNAME",
+                                   flags={"check_state_message": True,
+                                          "state_filter": StateFilter('EDITING REG FULLNAME'),
+                                          "state_error_message": "Вы сейчас изменяете ФИО в запросе на регистрацию!"})
     router.callback_query.register(callback_for_set_send_send_all_button,
                                    lambda query: query.data.startswith('SET SEND_ALL'),
                                    flags={"required_permissions": ["/emails"],
@@ -651,9 +790,11 @@ def reg_handlers():
                                           "state_filter": StateFilter('TYPING UNBAN USER ID'),
                                           "state_error_message": "Вы сейчас не пишете ID пользователя для разблокировки!!"})
     router.callback_query.register(callback_for_accept_reg_button,
-                                   lambda query: query.data.startswith('ACCEPT REG'))
-    router.callback_query.register(callback_for_decline_reg_button,
-                                   lambda query: query.data.startswith('DECLINE REG'))
+                                   lambda query: query.data.startswith('ACCEPT REG '),
+                                   flags={"required_permissions": ["responder"]})
+    router.callback_query.register(callback_for_reject_reg_button,
+                                   lambda query: query.data.startswith('REJECT REG '),
+                                   flags={"required_permissions": ["responder"]})
     router.callback_query.register(callback_for_set_location_buttons,
                                    lambda query: query.data.startswith('SET LOCATION - '),
                                    flags={"check_state_message": True,
@@ -679,7 +820,8 @@ def reg_handlers():
                                                                       startswith=True),
                                           "state_error_message": "Вы сейчас не редактируете пользователя!"})
     router.callback_query.register(callback_for_ban_reg_button,
-                                   lambda query: query.data.startswith('BAN '))
+                                   lambda query: query.data.startswith('REJECT AND BAN REG '),
+                                   flags={"required_permissions": ["responder"]})
     router.callback_query.register(callback_for_edit_user_button,
                                    lambda query: query.data.startswith('EDIT USER '),
                                    flags={"required_permissions": ["edit_users"],

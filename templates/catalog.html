@@ -1,0 +1,458 @@
+{%  extends "index.html" %}
+
+{% block before_body %}
+    <div id="file-uploader-div">
+        <form method="post" action="/file?csrf_token={{ csrf_token }}"  enctype="multipart/form-data" id="file-uploader-form">
+            <input type="hidden" value="-1" name="action_id" id="action-id-uploader-input">
+            <label for="as-document-uploader-input">Отправить файлом</label><input type="checkbox" name="as_document" id="as-document-uploader-input">
+            <input type="file" name="file" id="file-uploader-input">
+            <input type="submit" id="file-uploader-submit-button" title="Отправить">
+        </form>
+        <button id="close-file-uploader-button" onclick="closeFileUploader()">Закрыть</button>
+    </div>
+{%  endblock %}
+
+{% block main %}
+    <div id="catalog_items">
+        {%  for catalog_item in catalog_items %}
+            <div class="catalog_item" draggable="true" id="CI_{{ catalog_item.id }}">
+                <p>{{ catalog_item.text }}</p><span></span>
+            </div>
+        {% endfor %}
+        <div id="add_catalog_item_btn">
+            +
+        </div>
+    </div>
+    <script type="text/javascript">
+        async function makeRequest(endpoint, method, body={}, headers={}, stringify=true) {
+            if (stringify) body = JSON.stringify(body);
+            let args = {method: method, headers: headers};
+            if (method !== 'GET' && method !== "HEAD") {
+                args.body = body;
+            }
+            return  await (fetch(endpoint, args)).then((response) => {
+                if (response.status === 403) {
+                    alert(response.json().message);
+                    location.reload();
+                }
+                if (response.status === 400) {
+                    alert(response.json().message);
+                    return;
+                }
+                let result = response.json();
+                result.status = response.status;
+                return result;
+            });
+        }
+        async function addActionForCatalogItemClick(event) {
+            let catalog_item_id = event.target.parentNode.parentNode.parentNode.parentElement.id.slice(3, -7);
+            let message_text = prompt("Напишите текст сообщения, который отправится при выполнении действия:", "Вы нажали на ЭЛЕМЕНТ " + catalog_item_id);
+            if (!message_text) return;
+            let action = await createActionForCatalogItem(catalog_item_id, message_text);
+            event.target.parentNode.parentNode.parentElement.appendChild(getActionRadioDiv(action, "catalog_item", catalog_item_id, true));
+            document.querySelector("#action_" + action._id + "_radio").addEventListener("change", actionChoice);
+            document.querySelector("#action_" + action._id + "_radio_div").addEventListener("dragstart", dragStartBaseBehavior);
+            document.querySelector("#action_" + action._id + "_radio_div").addEventListener("dragover", dragOverActionBehavior);
+            document.querySelector("#action_" + action._id + "_radio_div").addEventListener("dragend", dragEndActionBehavior);
+        }
+
+        function getActionRadioDiv(action, for_, for_id, as_element=false) {
+            let action_type = '';
+            if (action.type === 'send_message') action_type = 'Отправка сообщения';
+            if (!as_element) return '<div class="action_radio_div radio_div" id="action_'+ action._id.toString() +'_radio_div" draggable="true"><input type="radio" name="'+ for_ + '_' + for_id +'" class="radio_input action_radio" id="action_'+ action._id.toString() +'_radio"/><label class="radio_labal action_radio_label">' + action_type + '</label></div>';
+            if (as_element) {
+                let div = document.createElement('div');
+                div.classList.add("action_radio_div");
+                div.classList.add("radio_div");
+                div.id = 'action_'+ action._id.toString() +'_radio_div';
+                div.draggable = true;
+                div.innerHTML = '<input type="radio" name="'+ for_ + '_' + for_id +'" class="radio_input action_radio" id="action_'+ action._id.toString() +'_radio"/><label class="radio_labal action_radio_label">' + action_type + '</label>';
+                return div;
+            }
+        }
+
+        function createActionsListFieldset(actions, for_, for_id) {
+            let innerHTML = '<fieldset><legend><h3>Действия:</h3><span class="add-action-button"><img src="/static/img/plus.png" alt="Добавить действие"></span><span class="remove-action-button"><img src="/static/img/bin.png" alt="Убрать действие"></span></legend>';
+
+            for (const action of actions) {
+                innerHTML += getActionRadioDiv(action, for_, for_id);
+            }
+            return innerHTML;
+        }
+
+        function displayLoader(reason) {
+            document.querySelector('#loader-div').style.display = "flex";
+            document.querySelector('#loader-reason-div').innerHTML = reason + "...";
+        }
+
+        function hideLoader() {
+            document.querySelector('#loader-div').style.display = "none";
+        }
+
+        async function editCITextClick(event) {
+            let prev_text_element = event.target.parentElement.getElementsByClassName("catalog_item_text")[0];
+            let CI_ID = event.target.parentElement.parentElement.id.slice(3, -7);
+            let new_text = prompt('Введите новый текст', prev_text_element.innerHTML);
+            if (new_text && new_text !== prev_text_element.innerHTML) {
+                await updateCITextByID(CI_ID, new_text);
+                prev_text_element.innerHTML = new_text;
+                document.querySelector('#CI_' + CI_ID).innerHTML = new_text;
+            }
+        }
+        async function editMessageText(event) {
+            let prev_text_element = event.target.parentElement.getElementsByClassName("message_text")[0];
+            let A_id = event.target.parentElement.parentElement.id.slice(2, -7);
+            let new_text = prompt('Введите новый текст сообщения', prev_text_element.innerHTML);
+            if (new_text && new_text !== prev_text_element.innerHTML) {
+                await updateMessageTextByID(A_id, new_text)
+                prev_text_element.innerHTML = new_text;
+            }
+        }
+
+        function getFileDiv(file, as_element=false) {
+            let file_type = '';
+            if (file.type === 'audio') file_type = 'Аудио';
+            else if (file.type === 'video') file_type = 'Видео';
+            else if (file.type === 'image') file_type = 'Фото';
+            else {
+                file_type = 'Документ';
+                file.type = 'document';
+            };
+            let img_src = '/static/img/' + file.type + '.png'
+            if (file_type === 'Фото') img_src = file.path;
+            if (!as_element) {
+                let result = '';
+                result += '<div draggable="true" class="file-div" id="file-' + file._id.toString() + '-div">'
+                result += '<a draggable="false" href="' + file.path + '" target="_blank"><img draggable="false" src="' + img_src + '" alt="' + file_type + '"></a>'
+                result += '<p draggable="false">' + file_type + ' (' + file.name + ')</p></div>';
+                return result;
+            }
+            let result = document.createElement('div')
+            result.id = 'file-' + file._id.toString() + '-div';
+            result.classList.add('file-div');
+            result.draggable = true;
+            result.innerHTML = '<a draggable="false" href="' + file.path + '" target="_blank"><img draggable="false" src="' + img_src + '" alt="' + file_type + '"></a><p draggable="false">' + file_type + ' (' + file.name + ')</p>';
+            return result;
+        }
+
+        async function actionChoice(e) {
+            if (!e.target.checked)  return;
+            const main = document.getElementsByTagName("main")[0];
+            let next_element = e.target.parentElement.parentElement.parentElement.nextElementSibling;
+            while (next_element) {
+                let rm_element = next_element;
+                next_element = next_element.nextElementSibling;
+                main.removeChild(rm_element);
+            }
+            const br = document.createElement("br");
+            br.classList.add('space_between_editors');
+            main.append(br);
+            e.target.id.slice(7, -10);
+            let action = await getActionByID(e.target.id.slice(7, -6));
+            const editor_div = document.createElement("div");
+            editor_div.classList.add("editor_div", "action_editor");
+            editor_div.id = "A_" + action._id.toString() + "_editor";
+            let innerHTML  = '<h2 class="action_title">Отправка сообщения</h2>';
+            innerHTML += '<h3>Вложения:</h3><span class="add-file-button" onclick="openFileUploader(' + action._id.toString() +')"><img src="/static/img/plus.png" alt="Добавить файл"></span><span class="remove-file-button"><img src="/static/img/bin.png" alt="Убрать файл"></span>';
+            if (action.files.length === 0) {
+                innerHTML += '<div class="files-container" id="action-' + action._id.toString() + '-files-container"></div>'
+            }
+            else {
+                innerHTML += '<div class="files-container" id="action-' + action._id.toString() + '-files-container">';
+                action.files.forEach((file) => {innerHTML += getFileDiv(file)});
+                innerHTML += '</div>';
+            }
+            innerHTML += '<h3>Текст:</h3>';
+            innerHTML += '<div class="message_text_editor"><p class="message_text">' + action.message_text + '</p>';
+            innerHTML += '<button class="edit_message_text_btn" type="button">Изменить</button></div>';
+            editor_div.innerHTML = innerHTML;
+            editor_div.id = "A_" + action._id.toString() + "_editor";
+            main.append(editor_div);
+            document.querySelector("main #A_" + action._id.toString() + "_editor .message_text_editor .edit_message_text_btn").addEventListener('click', editMessageText)
+            document.querySelectorAll("main #A_" + action._id.toString() + "_editor .files-container .file-div").forEach((div) => {
+                div.addEventListener('dragstart', dragStartBaseBehavior);
+                div.addEventListener('dragover', dragOverFileBehavior);
+                div.addEventListener('dragend', dragEndFileBehavior);
+            });
+        }
+
+        function openFileUploader(action_id) {
+            document.getElementById("file-uploader-div").style.display = "flex";
+            document.getElementById('action-id-uploader-input').value = action_id.toString();
+        }
+
+        async function getActionByID(action_id) {
+            displayLoader("Получение данных");
+            let response = await makeRequest('/action?csrf_token={{ csrf_token }}&id='+ action_id.toString(), "GET",  undefined, {"Content-type": "application/json; charset=UTF-8"})
+            if (!response.success) {
+                alert("По какой-то причине вам отказано в доступе, возможно у вас недостаточно прав или вы вышли из аккаунта");
+                location.reload();
+            }
+            hideLoader();
+            return response;
+        }
+
+        async function getCatalogItemByID(CI_ID) {
+            displayLoader("Получение данных");
+            let response = await makeRequest('/catalog_item?csrf_token={{ csrf_token }}&id='+ CI_ID, "GET", undefined, {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+            return response;
+        }
+
+        async function catalogItemsClick(event) {
+            let CI_ID = event.target.id.slice(3);
+            if (event.target.nodeName === "P") CI_ID = event.target.parentElement.id.slice(3);
+            if (CI_ID === '') return;
+            let catalog_item = await getCatalogItemByID(CI_ID);
+            document.querySelectorAll(".editor_div").forEach((value) => value.remove());
+            document.querySelectorAll('.space_between_editors').forEach((value) => value.remove());
+            let main = document.querySelector('main')
+            const br = document.createElement("br");
+            br.classList.add('space_between_editors');
+            main.append(br);
+            let editor_div = document.createElement("div");
+            editor_div.classList.add("editor_div");
+            editor_div.classList.add("catalog_item_editor_div");
+            editor_div.id = "CI_" + catalog_item._id.toString() + "_editor"
+            let innerHTML = '<div class="catalog_item_text_editor"><h2 class="catalog_item_text">' + catalog_item.text + '</h2><button class="edit_catalog_item_text_btn">Изменить</button></div>'
+            innerHTML += createActionsListFieldset(catalog_item.actions, 'catalog_item', CI_ID);
+            editor_div.innerHTML = innerHTML;
+            main.append(editor_div);
+            document.querySelector("main #CI_" + catalog_item._id.toString() + "_editor .catalog_item_text_editor .edit_catalog_item_text_btn").addEventListener('click', editCITextClick)
+            document.querySelector("main #CI_" + catalog_item._id.toString() + "_editor fieldset legend .add-action-button img").addEventListener('click', addActionForCatalogItemClick)
+            let radios = document.querySelectorAll("main #CI_" + catalog_item._id.toString() + "_editor fieldset .action_radio_div input");
+            radios.forEach((r) => {
+                r.addEventListener("change", actionChoice)
+            })
+            let radio_divs = document.querySelectorAll("main #CI_" + catalog_item._id.toString() + "_editor fieldset .action_radio_div");
+            radio_divs.forEach((div) => {
+                div.addEventListener("dragstart", dragStartBaseBehavior);
+                div.addEventListener("dragover", dragOverActionBehavior);
+                div.addEventListener("dragend", dragEndActionBehavior);
+            })
+        }
+
+        async function deleteCiByID(catalog_item_id) {
+            displayLoader("Удаление");
+            await makeRequest('/catalog_item?csrf_token={{ csrf_token }}&id='+ catalog_item_id, "DELETE", undefined,  {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+        }
+
+        async function deleteCIButtonClick(event) {
+            await deleteCiByID(event.target.parentElement.id.slice(3));
+            event.target.parentElement.remove();
+        }
+        async function createCI() {
+            displayLoader("Добавление");
+            let response = await makeRequest('/catalog_item?csrf_token={{ csrf_token }}', "POST", undefined, {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+            return response;
+        }
+        async function createActionForCatalogItem(catalog_item_id, message_text) {
+            displayLoader("Добавление");
+            let response = await makeRequest('/action?csrf_token={{ csrf_token }}&for=catalog_item&catalog_item_id=' + catalog_item_id, "POST", {"message_text": message_text}, {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+            return response;
+        }
+        async function updateCITextByID(catalog_item_id, new_text) {
+            displayLoader("Сохранение");
+            let response = await makeRequest('/catalog_item?csrf_token={{ csrf_token }}&id=' + catalog_item_id, "PATCH", {"text": new_text},  {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+            return response;
+        }
+
+        async function updateMessageTextByID(action_id, new_text) {
+            displayLoader("Сохранение");
+            let response = await makeRequest('/action?csrf_token={{ csrf_token }}&id=' + action_id, "PATCH", {"message_text": new_text},  {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+            return response;
+        }
+
+        async function addCIClick(event) {
+            let catalog_item = await createCI();
+            let div = document.createElement('div');
+            div.draggable = true;
+            div.classList.add('catalog_item');
+            div.id = 'CI_' + catalog_item._id.toString();
+            div.innerHTML = '<p>' + catalog_item.text + '</p><span></span>';
+            div.addEventListener('click', catalogItemsClick)
+            event.target.parentElement.insertBefore(div, event.target)
+            document.querySelector('#CI_' + catalog_item._id.toString() + ' span').addEventListener('click', deleteCIButtonClick)
+            document.querySelector('#CI_' + catalog_item._id.toString()).addEventListener('dragstart', dragStartBaseBehavior)
+            document.querySelector('#CI_' + catalog_item._id.toString()).addEventListener('dragend', dragEndCatalogItemBehavior)
+        }
+
+        async function updateCatalogItemsOrder(order) {
+            displayLoader("Сохранение");
+            await makeRequest('/catalog_items_order?csrf_token={{ csrf_token }}', "PUT", {"order": order},  {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+        }
+
+        async function updateFilesOrder(order, action_id) {
+            displayLoader("Сохранение");
+            await makeRequest('/files_order?csrf_token={{ csrf_token }}&action_id=' + action_id, "PUT", {"order": order},  {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+        }
+
+        function getCurrentCatalogItemsOrder() {
+            let order = [];
+            document.querySelectorAll(".catalog_item").forEach(catalog_item => {
+                order.push(Number(catalog_item.id.slice(3)));
+            })
+            return order;
+        }
+
+        function dragStartBaseBehavior(e) {
+            e.target.classList.add("dragging");
+        }
+
+        function dragEndBaseBehavior(e) {
+            e.target.classList.remove("dragging");
+        }
+
+        async function dragEndCatalogItemBehavior(e) {
+            dragEndBaseBehavior(e);
+            await updateCatalogItemsOrder(getCurrentCatalogItemsOrder());
+        }
+
+        function dragOverCatalogItemBehavior(e) {
+            let currentElement = document.querySelector('.dragging');
+            let target = document.elementFromPoint(e.clientX, e.clientY);
+            if (target.classList.contains("catalog_item")) {
+                if (target === target.parentNode.firstElementChild) {
+                    currentElement.parentNode.insertBefore(currentElement, target);
+                }
+                else if (target.previousElementSibling.id === currentElement.id || target === target.parentNode.lastElementChild) {
+                    currentElement.parentNode.insertBefore(currentElement, target.nextElementSibling);
+                }
+                else {
+                    currentElement.parentNode.insertBefore(currentElement, target);
+                }
+            }
+        }
+
+        function dragOverActionBehavior(e) {
+            let currentElement = document.querySelector('.dragging');
+            let target = document.elementFromPoint(e.clientX, e.clientY);
+            if (target.tagName === "LABEL") target = target.parentElement;
+            if (target.tagName === "INPUT") target = target.parentElement;
+            if (target.classList.contains("action_radio_div") && target.firstElementChild.name === currentElement.firstElementChild.name) {
+                if (target === target.parentNode.firstElementChild) {
+                    currentElement.parentNode.insertBefore(currentElement, target);
+                }
+                else if (target.previousElementSibling.id === currentElement.id || target === target.parentNode.lastElementChild) {
+                    currentElement.parentNode.insertBefore(currentElement, target.nextElementSibling);
+                }
+                else {
+                    currentElement.parentNode.insertBefore(currentElement, target);
+                }
+            }
+        }
+
+        function dragOverFileBehavior(e) {
+            let currentElement = document.querySelector('.dragging');
+            let target = document.elementFromPoint(e.clientX, e.clientY);
+            if (target.tagName === "P") target = target.parentElement;
+            if (target.tagName === "IMG") target = target.parentElement;
+            if (target.classList.contains("file-div") && target.parentElement.id === currentElement.parentElement.id) {
+                if (target === target.parentNode.firstElementChild) {
+                    currentElement.parentNode.insertBefore(currentElement, target);
+                }
+                else if (target.previousElementSibling.id === currentElement.id || target === target.parentNode.lastElementChild) {
+                    currentElement.parentNode.insertBefore(currentElement, target.nextElementSibling);
+                }
+                else {
+                    currentElement.parentNode.insertBefore(currentElement, target);
+                }
+            }
+        }
+
+        async function deleteActionByID(action_id) {
+            displayLoader("Удаление");
+            await makeRequest('/action?csrf_token={{ csrf_token }}&id='+ action_id, "DELETE", undefined,  {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+        }
+
+        async function updateActionsOrderByCatalogItemID(catalog_item_id, actions_order) {
+            displayLoader("Сохранение");
+            await makeRequest('/actions_order?csrf_token={{ csrf_token }}&for=catalog_item&catalog_item_id=' + catalog_item_id, "PUT", {"order": actions_order},  {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+        }
+
+        async function dragEndActionBehavior(e) {
+            let current_element = document.querySelector('.dragging');
+            dragEndBaseBehavior(e);
+            let target = document.elementFromPoint(e.clientX, e.clientY);
+            if (target.tagName === "LABEL") target = target.parentElement;
+            if (target.tagName === "INPUT") target = target.parentElement;
+            if (target.tagName === "IMG") target = target.parentElement;
+            if (target.classList.contains("remove-action-button")) {
+                await deleteActionByID(current_element.id.slice(7, -10));
+                current_element.remove();
+            }
+            let actions_order = [];
+            current_element.parentElement.querySelectorAll(".action_radio_div").forEach((div) => actions_order.push(Number(div.id.slice(7, -10))));
+            await updateActionsOrderByCatalogItemID(current_element.parentElement.parentElement.id.slice(3,-7), actions_order)
+        }
+
+        async function deleteFileByID(file_id) {
+            displayLoader("Удаление");
+            await makeRequest('/file?csrf_token={{ csrf_token }}&id='+ file_id, "DELETE", undefined,  {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+        }
+
+        async function updateFilesOrderByActionID(action_id, files_order) {
+            displayLoader("Сохранение");
+            await makeRequest('/files_order?csrf_token={{ csrf_token }}&action_id=' + action_id, "PUT", {"order": files_order}, {"Content-type": "application/json; charset=UTF-8"});
+            hideLoader();
+        }
+
+        async function dragEndFileBehavior(e) {
+            let current_element = document.querySelector('.dragging');
+            dragEndBaseBehavior(e);
+            let target = document.elementFromPoint(e.clientX, e.clientY);
+            if (target.tagName === "IMG") target = target.parentElement;
+            if (target.classList.contains("remove-file-button")) {
+                await deleteFileByID(current_element.id.slice(5, -4));
+                current_element.remove();
+                return;
+            }
+            let files_order = [];
+            current_element.parentElement.querySelectorAll(".file-div").forEach((div) => files_order.push(Number(div.id.slice(5, -4))));
+            await updateFilesOrderByActionID(current_element.parentElement.id.slice(7, -16), files_order)
+        }
+        function closeFileUploader() {
+            document.getElementById("file-uploader-div").style.display = "none";
+        }
+        function submitFileUploader(event) {
+            console.log(event)
+            event.preventDefault()
+            let res = event.target.Submit();
+            console.log(res)
+        }
+
+        document.querySelectorAll('.catalog_item').forEach((value) => value.addEventListener('click', catalogItemsClick));
+        document.querySelectorAll('.catalog_item').forEach((value) => value.addEventListener('dragstart', dragStartBaseBehavior));
+        document.querySelectorAll('#catalog_items').forEach((value) => value.addEventListener('dragover', dragOverCatalogItemBehavior));
+        document.querySelectorAll('.catalog_item').forEach((value) => value.addEventListener('dragend', dragEndCatalogItemBehavior));
+        document.querySelectorAll('.catalog_item span').forEach((value) => value.addEventListener('click', deleteCIButtonClick));
+        document.querySelector('#add_catalog_item_btn').addEventListener('click', addCIClick);
+
+        function addFile(file, action_id) {
+            let div = getFileDiv(file, true);
+            div.addEventListener('dragstart', dragStartBaseBehavior);
+            div.addEventListener('dragover', dragOverFileBehavior);
+            div.addEventListener('dragend', dragEndFileBehavior);
+            document.getElementById('action-' + action_id + '-files-container').appendChild(div)
+        }
+
+        document.querySelector('#file-uploader-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            displayLoader("Отправка файла")
+            let response = await makeRequest(event.target.action, event.target.method, new FormData(event.target), undefined, false);
+            hideLoader()
+            addFile(response, document.getElementById('action-id-uploader-input').value);
+            closeFileUploader()
+        })
+    </script>
+{% endblock %}

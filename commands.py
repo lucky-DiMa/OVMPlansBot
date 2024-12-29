@@ -15,6 +15,7 @@ commands = {'/send_plan': Command('Отправить план на завтра
             '/emails': Command('Список добавленных почт', ['/emails']),
             '/notify': Command('Разослать уведомления', ['/notify']),
             '/invite': Command('Пригласить нового сотрудника', ['invite_new_users']),
+            '/requests': Command('Ответить на запросы на доступ к боту', ['responder']),
             '/restart': Command('Программный перезапуск бота', ['/restart']),
             '/get_user': Command('Информация о пользователе и интерфейс для его редактирования по ID', ['/get_user']),
             '/unban': Command('Разблокировать пользователя по ID', ['/unban']),
