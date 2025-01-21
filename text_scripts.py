@@ -1,5 +1,7 @@
 import re
 from datetime import date, timedelta, datetime
+from time import sleep
+
 from aiogram.enums import ContentType
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup
@@ -14,6 +16,7 @@ from check_message_types import is_command
 from classes import PlansBotUser, Plan, Email, State, CatalogItem, AccessRequest
 from create_bot import router, bot
 from filters import StateFilter
+from help import send_find_number_request
 from mongo_connector import mongo_db
 from mytime import next_send_day, beauty_date
 
@@ -409,6 +412,25 @@ async def switch_holidays_command(message: types.Message):
     os.system("bash main.sh")
 
 
+async def check_phone_command(message: types.Message, user: PlansBotUser):
+    await message.delete()
+    msg = await user.send_message_with_no_try('Отправьте мне номер в формате <code>формат</code>', markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text='<< НАЗАД >>', callback_data='CANCEL TYPING PHONE TO CHECK')]]))
+    user.id_of_message_promoter_to_type = msg.message_id
+    user.state = "TYPING PHONE TO CHECK"
+
+
+async def check_phone_message(message: types.Message, user: PlansBotUser):
+    await user.delete_state_message()
+    user.state = 'NONE'
+    await message.delete()
+    msg = await user.send_message(f'Запрос на пробив номера <code>{message.text}</code> отправлен')
+    response = await send_find_number_request(message.text)
+    res_msg_text = f"На запрос <code>{message.text}</code> нашлось {len(response['numbers'])} записей:\n\n" if response.get('numbers', []) else f"На запрос <code>{message.text}</code> ничего не нашлось нашлось!"
+    for i, number in enumerate(response.get('numbers', []), start=1):
+        res_msg_text += f'Запись <u><i>#{i}</i></u>:\nФИО: <code>{number.get("object", "не указано")}</code>\nКомпания: <code>{number.get("parent", "не указано")}</code>\n\n'
+    await msg.edit_text(res_msg_text, parse_mode='HTML')
+
+
 def reg_handlers():
     router.message.register(no, lambda message: message.chat.type in ['group', 'supergroup'])
     router.message.register(banned, lambda _, is_user_banned: is_user_banned)
@@ -446,6 +468,9 @@ def reg_handlers():
     router.message.register(unban_user_id_message,
                             StateFilter('TYPING UNBAN USER ID'), F.content_type == ContentType.TEXT,
                             flags={"required_permissions": ["/unban"]})
+    router.message.register(check_phone_message,
+                            StateFilter('TYPING PHONE TO CHECK'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/check_phone"]})
     router.message.register(new_reg_fullname_message,
                             StateFilter('EDITING REG FULLNAME'), F.content_type == ContentType.TEXT)
     router.message.register(fullname_message,
@@ -479,6 +504,9 @@ def reg_handlers():
     router.message.register(requests_command,
                             Command('requests'), F.content_type == ContentType.TEXT,
                             flags={"required_permissions": ["responder"]})
+    router.message.register(check_phone_command,
+                            Command('check_phone'), F.content_type == ContentType.TEXT,
+                            flags={"required_permissions": ["/check_phone"]})
     router.message.register(restart_command,
                             Command('restart'), F.content_type == ContentType.TEXT,
                             flags={"required_permissions": ["/restart"]})

@@ -20,5 +20,6 @@ permissions = {'/get_plans': 'Команда /get_plans',
                '/kick': 'Удаление пользователей',
                '/unban': 'Команда /unban, разблокировка пользователей',
                '/edit_catalog': 'Команда /edit_catalog, изменение каталога',
+               '/check_phone': 'Команда /check_phone, пробив номера',
                'responder': 'Команда /requests, возможность управлять запросами на доступ',
                'choose_admins': 'Выбирать администраторов'}

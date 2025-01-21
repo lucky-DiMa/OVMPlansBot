@@ -404,7 +404,7 @@ class PlansBotUser:
 
     async def edit_state_message(self, text: str,
                                  markup: types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup | None = None) -> types.Message:
-        return await bot.edit_message_text(text, self.id, self.id_of_message_promoter_to_type, reply_markup=markup,
+        return await bot.edit_message_text(text, chat_id=self.id, message_id=self.id_of_message_promoter_to_type, reply_markup=markup,
                                            parse_mode='HTML')
 
     async def delete_state_message(self):

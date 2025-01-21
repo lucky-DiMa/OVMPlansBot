@@ -2,7 +2,9 @@ import hashlib
 import hmac
 import time
 
-from config import TOKEN
+import aiohttp
+
+from config import TOKEN, RDP_1C_URL
 
 
 def sort_dict(dict_: dict, by: str, reverse: bool = False):
@@ -37,3 +39,15 @@ def check_telegram_authorization(auth_data: dict):
         return False
 
     return auth_data
+
+
+async def send_find_number_request(number: str):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(RDP_1C_URL, json={"app":"CRM-mobile",
+                                                  "device":"A11 Pro Max",
+                                                  "mobile_id":"96822343b76e4f44",
+                                                  "operation":"findnumber",
+                                                  "useruid":"db68d698-94f5-11ee-94ea-6cb3116585bc",
+                                                  "number": number}) as response:
+            return await response.json(content_type='text/plain')
+

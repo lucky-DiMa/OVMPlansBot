@@ -51,17 +51,17 @@ class AccessRequest:
                  response_datetime: datetime = None,
                  admin_id: int = None,
                  admin_fullname: str = None):
-        self._id = _id
-        self._user_id = user_id
-        self._user_fullname = user_fullname
-        self._user_location = user_location
-        self._user_section = user_section
-        self._status = status
-        self._creation_datetime = creation_datetime
-        self._last_modify_datetime = last_modify_datetime
-        self._response_datetime =  response_datetime
-        self._responder_id = admin_id
-        self._responder_fullname = admin_fullname
+        self.__id = _id
+        self.__user_id = user_id
+        self.__user_fullname = user_fullname
+        self.__user_location = user_location
+        self.__user_section = user_section
+        self.__status = status
+        self.__creation_datetime = creation_datetime
+        self.__last_modify_datetime = last_modify_datetime
+        self.__response_datetime =  response_datetime
+        self.__responder_id = admin_id
+        self.__responder_fullname = admin_fullname
 
     @classmethod
     def from_JSON(cls, data: dict):
@@ -79,16 +79,16 @@ class AccessRequest:
                    data['admin_fullname'])
 
     def to_JSON(self):
-        return {'_id': self._id, 'user_id': self._user_id,
-                'user_fullname': self._user_fullname,
-                'user_location': self._user_location,
-                'user_section': self._user_section,
-                'status': self._status,
-                'creation_datetime': self._creation_datetime,
-                'last_modify_datetime': self._last_modify_datetime,
-                'response_datetime': self._response_datetime,
-                'admin_id': self._responder_id,
-                'admin_fullname': self._responder_fullname}
+        return {'_id': self.__id, 'user_id': self.__user_id,
+                'user_fullname': self.__user_fullname,
+                'user_location': self.__user_location,
+                'user_section': self.__user_section,
+                'status': self.__status,
+                'creation_datetime': self.__creation_datetime,
+                'last_modify_datetime': self.__last_modify_datetime,
+                'response_datetime': self.__response_datetime,
+                'admin_id': self.__responder_id,
+                'admin_fullname': self.__responder_fullname}
 
     @staticmethod
     def editing_keyboard():
@@ -114,58 +114,58 @@ class AccessRequest:
         cls.collection.update_one({'_id': _id}, {'$set': {field: value}})
 
     def set_field(self, field: str, value: Any):
-        self.__class__.set_field_by_id(self._id, field, value)
+        self.__class__.set_field_by_id(self.__id, field, value)
 
     @property
     def id(self):
-        return self._id
+        return self.__id
 
     @property
     def user_id(self):
-        return self._user_id
+        return self.__user_id
 
     @property
     def user_fullname(self):
-        return self._user_fullname
+        return self.__user_fullname
 
     @property
     def user_location(self):
-        return self._user_location
+        return self.__user_location
 
     @property
     def user_section(self):
-        return self._user_section
+        return self.__user_section
 
     @property
     def status(self):
-        return self._status
+        return self.__status
 
     @property
     def creation_datetime(self):
-        return self._creation_datetime
+        return self.__creation_datetime
 
     @property
     def last_modify_datetime(self):
-        return self._last_modify_datetime
+        return self.__last_modify_datetime
 
     @property
     def response_datetime(self):
-        return self._response_datetime
+        return self.__response_datetime
 
     @property
     def responder_id(self):
-        return self._responder_id
+        return self.__responder_id
 
     @property
     def responder_fullname(self):
-        return self._responder_fullname
+        return self.__responder_fullname
 
     @user_fullname.setter
     def user_fullname(self, new_user_fullname: str):
         if not self.able_to_modify:
             raise ModifyException()
         self.update_last_modify_datetime()
-        self._user_fullname = new_user_fullname
+        self.__user_fullname = new_user_fullname
         self.set_field('user_fullname', new_user_fullname)
 
     @user_location.setter
@@ -173,7 +173,7 @@ class AccessRequest:
         if not self.able_to_modify:
             raise ModifyException()
         self.update_last_modify_datetime()
-        self._user_location = new_user_location
+        self.__user_location = new_user_location
         self.set_field('user_location', new_user_location)
 
     @user_section.setter
@@ -181,7 +181,7 @@ class AccessRequest:
         if not self.able_to_modify:
             raise ModifyException()
         self.update_last_modify_datetime()
-        self._user_section = new_user_section
+        self.__user_section = new_user_section
         self.set_field('user_section', new_user_section)
 
     def update_last_modify_datetime(self):
@@ -200,16 +200,16 @@ class AccessRequest:
             if not responder.is_allowed('responder'):
                 raise PermissionDeniedException(
                     f'User: "{responder.fullname}" {responder.id}. Permission: responder. Reason: user is admin but has not this permission')
-        self._status = AccessRequestStatuses.accepted.name
-        self.set_field('status', self._status)
+        self.__status = AccessRequestStatuses.accepted.name
+        self.set_field('status', self.__status)
         now_time_ = now_time()
-        self._response_datetime = now_time_
+        self.__response_datetime = now_time_
         self.set_field('response_datetime', now_time_)
-        self._responder_id = responder.id
+        self.__responder_id = responder.id
         self.set_field('responder_id', responder_id)
-        self._responder_fullname = responder.fullname
+        self.__responder_fullname = responder.fullname
         self.set_field('responder_fullname', responder.fullname)
-        PlansBotUser.get_by_id(self._user_id).state = "NONE"
+        PlansBotUser.get_by_id(self.__user_id).state = "NONE"
 
     def reject(self, responder_id: int):
         if not self.able_to_response_to:
@@ -222,16 +222,16 @@ class AccessRequest:
             if not responder.is_allowed('responder'):
                 raise PermissionDeniedException(
                     f'User: "{responder.fullname}" {responder.id}. Permission: responder. Reason: user is admin but has not this permission')
-        self._status = AccessRequestStatuses.rejected.name
-        self.set_field('status', self._status)
+        self.__status = AccessRequestStatuses.rejected.name
+        self.set_field('status', self.__status)
         now_time_ = now_time()
-        self._response_datetime = now_time_
+        self.__response_datetime = now_time_
         self.set_field('response_datetime', now_time_)
-        self._responder_id = responder.id
+        self.__responder_id = responder.id
         self.set_field('responder_id', responder_id)
-        self._responder_fullname = responder.fullname
+        self.__responder_fullname = responder.fullname
         self.set_field('responder_fullname', responder.fullname)
-        PlansBotUser.delete_by_id(self._user_id)
+        PlansBotUser.delete_by_id(self.__user_id)
 
     def reject_and_ban(self, responder_id: int):
         if not self.able_to_response_to:
@@ -244,26 +244,26 @@ class AccessRequest:
             if not responder.is_allowed('responder'):
                 raise PermissionDeniedException(
                     f'User: "{responder.fullname}" {responder.id}. Permission: responder. Reason: user is admin but has not this permission')
-        self._status = AccessRequestStatuses.rejected_and_banned.name
-        self.set_field('status', self._status)
+        self.__status = AccessRequestStatuses.rejected_and_banned.name
+        self.set_field('status', self.__status)
         now_time_ = now_time()
-        self._response_datetime = now_time_
+        self.__response_datetime = now_time_
         self.set_field('response_datetime', now_time_)
-        self._responder_id = responder.id
+        self.__responder_id = responder.id
         self.set_field('responder_id', responder_id)
-        self._responder_fullname = responder.fullname
+        self.__responder_fullname = responder.fullname
         self.set_field('responder_fullname', responder.fullname)
-        PlansBotUser.ban_by_id(self._user_id)
+        PlansBotUser.ban_by_id(self.__user_id)
 
     def cancel(self):
         if not self.able_to_response_to:
             raise CancelException()
-        self._status = AccessRequestStatuses.canceled.name
-        self.set_field('status', self._status)
+        self.__status = AccessRequestStatuses.canceled.name
+        self.set_field('status', self.__status)
         now_time_ = now_time()
-        self._response_datetime = now_time_
+        self.__response_datetime = now_time_
         self.set_field('response_datetime', now_time_)
-        PlansBotUser.delete_by_id(self._user_id)
+        PlansBotUser.delete_by_id(self.__user_id)
 
     @classmethod
     def get_by_id(cls, _id: int):
@@ -284,6 +284,11 @@ class AccessRequest:
     def get_waiting_by_user_id(cls, user_id: int) -> AccessRequest | None:
         return cls.from_JSON(cls.collection.find_one({"user_id": user_id, "status": AccessRequestStatuses.waiting.name}))
 
+    # @classmethod
+    # def get_latest_by_user_id(cls, user_id: int) -> AccessRequest | None:
+    #     ODO find latest request by user_id
+    #     ...
+
     @classmethod
     def next_id(cls) -> int:
         return get_next_id(cls.collection.name)
@@ -303,11 +308,11 @@ class AccessRequest:
         return self.status == AccessRequestStatuses.waiting.name
 
     async def get_info(self, for_sender: bool):
-        resp =  ("Запрос на получение доступа к боту был отправлен!\n\n" if for_sender else "") + f'Запрос <u><i>#{self.id}</i></u>:\nУказанное ФИО: <code>{self.user_fullname}</code>\nВыбранный регион: <code>{self.user_location}</code>\nВыбранный отдел: <code>{self.user_section}</code>\nИнформация об аккаунте в Telegram:\nID: <code>{self.user_id}</code>\nПолное имя: <code>{(await bot.get_chat(self._user_id)).full_name}</code>\nUsername: {"@" + (await bot.get_chat(self._user_id)).username if (await bot.get_chat(self._user_id)).username else "<code>не указан</code>"}\n\nВремя создания запроса: <code>{beauty_datetime(self._creation_datetime, 1)}</code>\nВремя последнего изменения: <code>{beauty_datetime(self._last_modify_datetime, 1) if self._last_modify_datetime else "запрос не был изменён"}</code>\n\nСтатус: <code>{AccessRequestStatuses.__getitem__(self.status).value}</code>'
+        resp =  ("Запрос на получение доступа к боту был отправлен!\n\n" if for_sender else "") + f'Запрос <u><i>#{self.id}</i></u>:\nУказанное ФИО: <code>{self.user_fullname}</code>\nВыбранный регион: <code>{self.user_location}</code>\nВыбранный отдел: <code>{self.user_section}</code>\nИнформация об аккаунте в Telegram:\nID: <code>{self.user_id}</code>\nПолное имя: <code>{(await bot.get_chat(self.__user_id)).full_name}</code>\nUsername: {"@" + (await bot.get_chat(self.__user_id)).username if (await bot.get_chat(self.__user_id)).username else "<code>не указан</code>"}\n\nВремя создания запроса: <code>{beauty_datetime(self.__creation_datetime, 1)}</code>\nВремя последнего изменения: <code>{beauty_datetime(self.__last_modify_datetime, 1) if self.__last_modify_datetime else "запрос не был изменён"}</code>\n\nСтатус: <code>{AccessRequestStatuses.__getitem__(self.status).value}</code>'
         if not self.able_to_response_to:
             if self.status == AccessRequestStatuses.canceled.name:
-                resp += '\nВремя отмены: <code>' + beauty_datetime(self._response_datetime, 1) + '</code>'
+                resp += '\nВремя отмены: <code>' + beauty_datetime(self.__response_datetime, 1) + '</code>'
             else:
-                resp += '\nВремя ответа: <code>' + beauty_datetime(self._response_datetime, 1) + '</code>'
-                resp += f'\n\nАдминистратор, ответивший на запрос:\nID: <code>{self._responder_id}</code>\nФИО: <code>{self._responder_fullname}</code>'
+                resp += '\nВремя ответа: <code>' + beauty_datetime(self.__response_datetime, 1) + '</code>'
+                resp += f'\n\nАдминистратор, ответивший на запрос:\nID: <code>{self.__responder_id}</code>\nФИО: <code>{self.__responder_fullname}</code>'
         return resp

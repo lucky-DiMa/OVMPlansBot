@@ -7,6 +7,7 @@ class State:
               "TYPING START WORK DATE AFTER VACATION": "Пишет дату окончания отпуска (план на {subject})",
               "TYPING START WORK DATE AFTER SICK": "Пишет дату окончания больничного (план на {subject})",
               "TYPING UNBAN USER ID": "Пишет ID пользователя для разблокировки",
+              "TYPING PHONE TO CHECK": "Пишет номер телефона для пробивки",
               "ADDING EMAIL": "Пишет адрес новой эл. почты (добавляет эл.почту)",
               "EDITING EMAIL": "Изменяет листы таблицы для почты {subject}",
               "EDITING USER": "Редактирует пользователя {subject}",

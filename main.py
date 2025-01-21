@@ -14,7 +14,7 @@ WEB_SERVER_HOST = "127.0.0.1"
 WEB_SERVER_PORT = 5000
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = str(randint(1, 1000000))
-print(Session.get_by_telegram_id(1358414277)[0].token)
+# print(Session.get_by_telegram_id(1358414277)[0].token)
 # print(Session.create(1358414277).token)
 
 
@@ -48,7 +48,7 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(filename='LOG.log')
-    logging.log(level=logging.INFO, msg=f'STARTED GMT +0 "{datetime.now()}"')
+    # logging.basicConfig(filename='LOG.log')
+    # logging.log(level=logging.INFO, msg=f'STARTED GMT +0 "{datetime.now()}"')
     register_handlers()
     main()

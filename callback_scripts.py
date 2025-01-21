@@ -641,6 +641,13 @@ async def callback_for_update_requests_button(query: types.CallbackQuery, user: 
         await query.answer()
 
 
+async def callback_for_cancel_typing_phone_to_check_button(query: types.CallbackQuery, user: PlansBotUser):
+    await user.edit_state_message('Действие отменено!')
+    user.state = 'NONE'
+    query.answer()
+
+
+
 def reg_handlers():
     router.callback_query.register(banned, lambda _, is_user_banned: is_user_banned)
     router.callback_query.register(callback_for_join_button, F.data == 'JOIN')
@@ -789,6 +796,11 @@ def reg_handlers():
                                    flags={"check_state_message": True,
                                           "state_filter": StateFilter('TYPING UNBAN USER ID'),
                                           "state_error_message": "Вы сейчас не пишете ID пользователя для разблокировки!!"})
+    router.callback_query.register(callback_for_cancel_typing_phone_to_check_button,
+                                   F.data == 'CANCEL TYPING PHONE TO CHECK',
+                                   flags={"check_state_message": True,
+                                          "state_filter": StateFilter('TYPING PHONE TO CHECK'),
+                                          "state_error_message": "Вы сейчас не пишете номер телефона для проверки!"})
     router.callback_query.register(callback_for_accept_reg_button,
                                    lambda query: query.data.startswith('ACCEPT REG '),
                                    flags={"required_permissions": ["responder"]})
