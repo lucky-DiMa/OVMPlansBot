@@ -39,7 +39,7 @@ class CancelException(Exception):
 class AccessRequest:
     collection_name = 'AccessRequests'
     collection = mongo_db[collection_name]
-    fields = ['user_id', 'user_fullname', 'user_location', 'user_section', 'status', 'date', 'last_modify_datetime', 'admin_id', 'admin_fullname']
+    fields = ['user_id', 'user_fullname', 'user_location', 'user_section', 'status', 'date', 'last_modify_datetime', 'responder_id', 'responder_fullname']
     
     def __init__(self, _id: int, user_id: int,
                  user_fullname: str,
@@ -75,8 +75,8 @@ class AccessRequest:
                    data['creation_datetime'],
                    data['last_modify_datetime'],
                    data['response_datetime'],
-                   data['admin_id'],
-                   data['admin_fullname'])
+                   data['responder_id'],
+                   data['responder_fullname'])
 
     def to_JSON(self):
         return {'_id': self.__id, 'user_id': self.__user_id,
@@ -87,8 +87,8 @@ class AccessRequest:
                 'creation_datetime': self.__creation_datetime,
                 'last_modify_datetime': self.__last_modify_datetime,
                 'response_datetime': self.__response_datetime,
-                'admin_id': self.__responder_id,
-                'admin_fullname': self.__responder_fullname}
+                'responder_id': self.__responder_id,
+                'responder_fullname': self.__responder_fullname}
 
     @staticmethod
     def editing_keyboard():
