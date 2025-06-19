@@ -1,10 +1,10 @@
 from __future__ import annotations
 import pymongo
-from classes import PlansBotUser
+from classes.plans_bot_user import PlansBotUser
 from classes.actions import SendMessageAction
 from typing import List, Any
 
-from mongo_connector import mongo_db, get_next_id
+from utils import mongo_db, get_next_id
 
 
 class CatalogItem:
@@ -46,7 +46,7 @@ class CatalogItem:
         return SendMessageAction.get_list_by_ids(self.actions_ids)
 
     @classmethod
-    def from_JSON(cls, data: dict | None) -> CatalogItem | None:
+    def from_json(cls, data: dict | None) -> CatalogItem | None:
         if data is None:
             return None
         return cls(*[data[field] for field in cls.fields])
@@ -61,16 +61,16 @@ class CatalogItem:
         self.collection.update_one({'text': self._text}, {'$set': {'index': _index}})
         self._index = _index
 
-    def to_JSON(self, extend: bool = False) -> dict:
+    def to_json(self, extend: bool = False) -> dict:
         if extend:
-            res = self.to_JSON()
-            res["actions"] = list(map(lambda action: action.to_JSON(), self.actions))
+            res = self.to_json()
+            res["actions"] = list(map(lambda action: action.to_json(), self.actions))
             return res
         return {field: self.__getattribute__(field) for field in self.__class__.fields}
 
     @classmethod
     def get_by_text(cls, text: str) -> CatalogItem:
-        return cls.from_JSON(cls.collection.find_one({'text': text}))
+        return cls.from_json(cls.collection.find_one({'text': text}))
 
     @classmethod
     def create(cls, text: str | None = None, prev_catalog_item_text: str = 'main') -> CatalogItem:
@@ -78,11 +78,11 @@ class CatalogItem:
         next_index = cls.get_next_index_by_prev_catalog_item_text("main")
         if text is None:
             text = f'ЭЛЕМЕНТ {next_id}'
-        return cls.get_by_id(cls.collection.insert_one(cls(next_id, text, prev_catalog_item_text, next_index, []).to_JSON()).inserted_id)
+        return cls.get_by_id(cls.collection.insert_one(cls(next_id, text, prev_catalog_item_text, next_index, []).to_json()).inserted_id)
 
     @classmethod
     def get_by_prev_catalog_item_text(cls, prev_catalog_item_text: str) -> List[CatalogItem] | list:
-        return list(map(cls.from_JSON, list(cls.collection.find({'prev_catalog_item_text': prev_catalog_item_text}).sort([('index', pymongo.ASCENDING)]))))
+        return list(map(cls.from_json, list(cls.collection.find({'prev_catalog_item_text': prev_catalog_item_text}).sort([('index', pymongo.ASCENDING)]))))
 
     @property
     def new_keyboard(self) -> list | List[CatalogItem]:
@@ -94,11 +94,11 @@ class CatalogItem:
 
     @classmethod
     def get_by_id(cls, _id: int) -> CatalogItem:
-        return cls.from_JSON(cls.collection.find_one({"_id": _id}))
+        return cls.from_json(cls.collection.find_one({"_id": _id}))
 
     @classmethod
     def get_by_containing_action_id(cls, action_id: int) -> CatalogItem:
-        return cls.from_JSON(cls.collection.find_one({"actions_ids": action_id}))
+        return cls.from_json(cls.collection.find_one({"actions_ids": action_id}))
 
     def add_action(self, action_id: int) -> None:
         self._actions_ids.append(action_id)
@@ -141,8 +141,8 @@ class CatalogItem:
             obj = cls.get_by_id(_id)
         for action in obj.actions:
             action.delete()
-        for catalog_item_json in cls.collection.find({"index": {"$gt": cls.from_JSON(cls.collection.find_one_and_delete({'_id': _id})).index}}):
-            cls.from_JSON(catalog_item_json).index = cls.from_JSON(catalog_item_json).index - 1
+        for catalog_item_json in cls.collection.find({"index": {"$gt": cls.from_json(cls.collection.find_one_and_delete({'_id': _id})).index}}):
+            cls.from_json(catalog_item_json).index = cls.from_json(catalog_item_json).index - 1
 
     @classmethod
     def get_count_by_prev_catalog_item_text(cls, prev_catalog_item_text: str) -> int:

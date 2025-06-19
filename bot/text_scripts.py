@@ -1,24 +1,18 @@
 import re
-from datetime import date, timedelta, datetime
-from time import sleep
+from datetime import date, timedelta
 
 from aiogram.enums import ContentType
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup
-from aiogram.utils.keyboard import KeyboardBuilder, ReplyKeyboardBuilder
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
 from classes.plans_bot_user import UserNotFoundException, PermissionDeniedException
 from config import switch_holidays_key
 from cron import send_notifications
 from aiogram import types, F
-
-from check_message_types import is_command
-from classes import PlansBotUser, Plan, Email, State, CatalogItem, AccessRequest
+from classes import PlansBotUser, Plan, Email, CatalogItem, AccessRequest
 from create_bot import router, bot
 from filters import StateFilter
-from help import send_find_number_request
-from mongo_connector import mongo_db
-from mytime import next_send_day, beauty_date
+from utils import send_find_number_request, mongo_db, next_send_day, beauty_date, is_command
 
 
 async def first_start_command(message: types.Message):
@@ -114,7 +108,7 @@ async def get_plans_command(message: types.Message):
     str_date = f'{next_send_day().day}.{next_send_day().month}.{next_send_day().year}'
     Plan.create_plans_table(str_date)
     await bot.send_document(message.from_user.id,
-                            types.FSInputFile('plans.xlsx', f'Планы на {beauty_date(str_date)}.xlsx'))
+                            types.FSInputFile('../plans.xlsx', f'Планы на {beauty_date(str_date)}.xlsx'))
 
 
 async def no_access(message: types.Message):

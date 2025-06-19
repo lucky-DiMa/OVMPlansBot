@@ -1,9 +1,7 @@
 from __future__ import annotations
 from typing import NamedTuple, List
-from mongo_connector import mongo_db
+from utils import mongo_db, now_time
 import secrets
-
-from mytime import now_time
 
 
 class SuccessfulCreatedSession(NamedTuple):
@@ -44,22 +42,22 @@ class Session:
         self.__class__.collection.update_one({'token': self._token}, {'$set': {'name': self._name}})
 
     @classmethod
-    def from_JSON(cls, data: dict | None) -> Session | None:
+    def from_json(cls, data: dict | None) -> Session | None:
         if data is None:
             return None
         return cls(*[data[field] for field in cls.fields])
 
     @classmethod
     def get_by_token(cls, token: str) -> Session:
-        return cls.from_JSON(cls.collection.find_one({"token": token}))
+        return cls.from_json(cls.collection.find_one({"token": token}))
 
     @classmethod
     def __get_by_csrf_token(cls, csrf_token: str) -> Session | None:
-        return cls.from_JSON(cls.collection.find_one({"csrf_token": csrf_token}))
+        return cls.from_json(cls.collection.find_one({"csrf_token": csrf_token}))
 
     @classmethod
     def get_by_telegram_id(cls, telegram_id: int) -> List[Session] | list:
-        return cls.from_JSON_list(list(cls.collection.find({"telegram_id": telegram_id})))
+        return cls.from_json_list(list(cls.collection.find({"telegram_id": telegram_id})))
 
     @classmethod
     def create(cls, telegram_id: int) -> Session:
@@ -70,17 +68,17 @@ class Session:
         while cls.__get_by_csrf_token(csrf_token) is not None:
             csrf_token = secrets.token_urlsafe(16)
         session = Session(token, csrf_token, telegram_id, f'Новая сессия от {now_time()}')
-        cls.collection.insert_one(session.to_JSON())
+        cls.collection.insert_one(session.to_json())
         return session
 
-    def to_JSON(self) -> dict:
+    def to_json(self) -> dict:
         return {field: self.__getattribute__(field) for field in self.__class__.fields}
 
     @classmethod
-    def from_JSON_list(cls, list_: List[dict] | list) -> List[Session] | list:
+    def from_json_list(cls, list_: List[dict] | list) -> List[Session] | list:
         result_list = []
         for json in list_:
-            result_list.append(cls.from_JSON(json))
+            result_list.append(cls.from_json(json))
         return result_list
 
     def end(self):

@@ -2,11 +2,15 @@ from copy import copy
 from typing import List
 from openpyxl.workbook import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side
-from help import sort_dict
-from mongo_connector import mongo_db
+
+from classes.mongo_db_object import MongoDBObject
+from utils import sort_dict, mongo_db
 
 
-class Plan:
+class Plan(MongoDBObject):
+    collection_name = 'Plans'
+    fields = {'user_id': int, 'text': str, 'date': str}
+
     def __init__(self, user_id: int, text: str, date: str):
         self._user_id = user_id
         self._text = text
@@ -27,36 +31,37 @@ class Plan:
     @text.setter
     def text(self, text: str):
         self._text = text
-        mongo_db["Plans"].update_one({"$and": [{"user_id": self.user_id}, {"date": self.date}]},
+        self.__class__.collection.update_one({"$and": [{"user_id": self.user_id}, {"date": self.date}]},
                                      {"$set": {"text": text}})
 
     @classmethod
     def get_by_date_and_user_id(cls, user_id: int, date: str):
-        dict_plan = mongo_db["Plans"].find_one({"$and": [{"user_id": user_id}, {"date": date}]})
+        dict_plan = cls.collection.find_one({"$and": [{"user_id": user_id}, {"date": date}]})
         if dict_plan is None:
             return None
-        return cls(dict_plan["user_id"], dict_plan["text"], dict_plan["date"])
+        return cls.from_json(dict_plan)
 
     @classmethod
     def get_by_date(cls, date: str):
-        list_of_dict_plans = mongo_db["Plans"].find({"date": date})
+        list_of_dict_plans = cls.collection.find({"date": date})
         list_of_plans = []
         for dict_plan in list_of_dict_plans:
-            list_of_plans.append(cls(dict_plan["user_id"], dict_plan["text"], dict_plan["date"]))
+            list_of_plans.append(cls.from_json(dict_plan))
         return list_of_plans
 
     @classmethod
     def get_by_user_id(cls, user_id: int):
-        list_of_dict_plans = mongo_db["Plans"].find({"user_id": user_id})
+        list_of_dict_plans = cls.collection.find({"user_id": user_id})
         list_of_plans = []
         for dict_plan in list_of_dict_plans:
-            list_of_plans.append(cls(dict_plan["user_id"], dict_plan["text"], dict_plan["date"]))
+            list_of_plans.append(cls.from_json(dict_plan))
         return list_of_plans
 
     @classmethod
     def create(cls, user_id: int, text: str, date: str):
-        mongo_db["Plans"].insert_one({"user_id": user_id, "text": text, "date": date})
-        return cls.get_by_date_and_user_id(user_id, date)
+        new_plan = cls(user_id, text, date)
+        cls.collection.insert_one(new_plan.to_json())
+        return new_plan
 
     @classmethod
     def create_plans_table(cls, str_date: str, sheets: List[str] | None = None):
@@ -146,7 +151,7 @@ class Plan:
 
     @classmethod
     def delete_all_by_user_id(cls, user_id: int, sheets: List[str] | None = None):
-        mongo_db["Plans"].delete_many({"user_id": user_id})
+        cls.collection.delete_many({"user_id": user_id})
 
 
 if __name__ == '___main__0:':

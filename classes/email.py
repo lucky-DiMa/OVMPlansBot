@@ -3,12 +3,16 @@ from typing import List
 
 from aiogram import types
 
-from mongo_connector import mongo_db
+from classes.mongo_db_object import MongoDBObject
+from utils import mongo_db
 
 
-class Email:
-    collection = mongo_db["Emails"]
+class Email(MongoDBObject):
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+    collection_name = 'emails'
+    fields = {'address': str,
+              "send_all": bool,
+              'location': str}
 
     def __init__(self, address: str, send_all: bool,
                  locations: List[str]):
@@ -86,8 +90,9 @@ class Email:
     def add(cls, address: str):
         if cls.exists(address):
             return None
-        cls.collection.insert_one({"address": address, "send_all": False, "locations": []})
-        return cls.get_by_address(address)
+        new_mail = cls(address, False, [])
+        cls.collection.insert_one(new_mail.to_json())
+        return new_mail
 
     @classmethod
     def get_all(cls):
@@ -102,10 +107,6 @@ class Email:
 
     def delete(self):
         self.__class__.delete_by_address(self.address)
-
-    @classmethod
-    def from_json(cls, self_dict: dict):
-        return cls(self_dict["address"], self_dict["send_all"], self_dict["locations"])
 
     @classmethod
     def get_by_address(cls, address: str):

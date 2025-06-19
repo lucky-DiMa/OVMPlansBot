@@ -3,7 +3,7 @@ from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from mytime import beauty_date, next_send_day
+from utils import beauty_date, next_send_day
 
 
 def send_table(receiver_email: str):
@@ -19,7 +19,7 @@ def send_table(receiver_email: str):
 
     message.attach(MIMEText(body, "plain"))
 
-    filename = "plans.xlsx"
+    filename = "../plans.xlsx"
     with open(filename, "rb") as attachment:
         part = MIMEBase("application", "octet-stream")
         part.set_payload(attachment.read())

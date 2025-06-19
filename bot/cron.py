@@ -1,9 +1,9 @@
 from datetime import date
-from mail_sender import send_table
+from mailing_client.mail_sender import send_table
 from aiogram import types
 from classes import PlansBotUser, Plan, Email
 from create_bot import bot
-from mytime import next_send_day, today, beauty_date
+from utils import next_send_day, today, beauty_date
 
 
 async def send_notifications():
@@ -39,5 +39,5 @@ async def mailing():
 
 async def send_plans_table():
     Plan.create_plans_table(f'{next_send_day().day}.{next_send_day().month}.{next_send_day().year}')
-    await bot.send_document(404053217, types.FSInputFile('plans.xlsx',
+    await bot.send_document(404053217, types.FSInputFile('../plans.xlsx',
                                                        f'Планы на {beauty_date(f"{next_send_day().day}.{next_send_day().month}.{next_send_day().year}")}.xlsx'))

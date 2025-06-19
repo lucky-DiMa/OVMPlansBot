@@ -1,13 +1,10 @@
 import asyncio
-import logging
-from datetime import datetime
 from random import randint
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-from classes import InlineButton, SendMessageAction, Session
 from config import BY_WEBHOOK, BASE_WEBHOOK_URL
-from create_bot import dp, bot
+from bot.create_bot import dp, bot
 from register import register_handlers
 
 WEB_SERVER_HOST = "127.0.0.1"

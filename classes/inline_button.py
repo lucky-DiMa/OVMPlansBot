@@ -5,7 +5,7 @@ from typing import Any, List, Literal
 from aiogram.filters.callback_data import CallbackData
 
 from classes import PlansBotUser
-from mongo_connector import mongo_db, get_next_id
+from utils import mongo_db, get_next_id
 
 
 class ButtonCallbackData(CallbackData, prefix='button'):
@@ -95,21 +95,21 @@ class InlineButton:
 
     @classmethod
     def create(cls, text: str, type_: Literal["link", "callback"]) -> InlineButton:
-        return cls.get_by_id(cls.collection.insert_one(cls(cls.next_id(), text, type_).to_JSON()).inserted_id)
+        return cls.get_by_id(cls.collection.insert_one(cls(cls.next_id(), text, type_).to_json()).inserted_id)
 
     @classmethod
     def get_by_id(cls, _id: int) -> InlineButton:
-        return cls.from_JSON(cls.collection.find_one({"_id": _id}))
+        return cls.from_json(cls.collection.find_one({"_id": _id}))
 
-    def to_JSON(self, extend: bool = False) -> dict:
+    def to_json(self, extend: bool = False) -> dict:
         if extend:
-            res = self.to_JSON()
-            res["actions"] = list(map(lambda action: action.to_JSON(), self.actions))
+            res = self.to_json()
+            res["actions"] = list(map(lambda action: action.to_json(), self.actions))
             return res
         return {field: self.__getattribute__(field) for field in self.__class__.fields}
 
     @classmethod
-    def from_JSON(cls, data: dict) -> InlineButton | None:
+    def from_json(cls, data: dict) -> InlineButton | None:
         if data is None:
             return None
         return cls(*[data[field] for field in cls.fields])
@@ -118,7 +118,7 @@ class InlineButton:
     def get_list_by_ids(cls, ids: List[int] | list) -> List[InlineButton] | list:
         if not ids:
             return []
-        return list(map(cls.from_JSON, list(cls.collection.find({"_id": {'$in': ids}}))))
+        return list(map(cls.from_json, list(cls.collection.find({"_id": {'$in': ids}}))))
 
     async def process_tap(self, user: PlansBotUser) -> None:
         for action in self.actions:
@@ -139,4 +139,4 @@ class InlineButton:
 
     @classmethod
     def get_by_containing_action_id(cls, _id: int):
-        return cls.from_JSON(cls.collection.find_one({"actions_ids": _id}))
+        return cls.from_json(cls.collection.find_one({"actions_ids": _id}))

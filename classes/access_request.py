@@ -6,10 +6,10 @@ from typing import Any, List
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from classes import PlansBotUser
+from classes.mongo_db_object import MongoDBObject
 from classes.plans_bot_user import PermissionDeniedException
-from create_bot import bot
-from mongo_connector import mongo_db, get_next_id
-from mytime import now_time, beauty_datetime
+from bot.create_bot import bot
+from utils import mongo_db, get_next_id, now_time, beauty_datetime
 
 
 class AccessRequestStatuses(Enum):
@@ -36,10 +36,16 @@ class CancelException(Exception):
     """You cannot cancel this request now"""
 
 
-class AccessRequest:
+class AccessRequest(MongoDBObject):
     collection_name = 'AccessRequests'
-    collection = mongo_db[collection_name]
-    fields = ['user_id', 'user_fullname', 'user_location', 'user_section', 'status', 'date', 'last_modify_datetime', 'responder_id', 'responder_fullname']
+    fields = {'user_id': int,
+              'user_fullname': str,
+              'user_location': str,
+              'user_section': str,
+              'status': str,
+              'date': datetime,
+              'last_modify_datetime': datetime,
+              'responder_id': int, 'responder_fullname': str}
     
     def __init__(self, _id: int, user_id: int,
                  user_fullname: str,
@@ -62,33 +68,6 @@ class AccessRequest:
         self.__response_datetime =  response_datetime
         self.__responder_id = admin_id
         self.__responder_fullname = admin_fullname
-
-    @classmethod
-    def from_JSON(cls, data: dict):
-        if not data:
-            return None
-        return cls(data['_id'], data['user_id'],
-                   data['user_fullname'],
-                   data['user_location'],
-                   data['user_section'],
-                   data['status'],
-                   data['creation_datetime'],
-                   data['last_modify_datetime'],
-                   data['response_datetime'],
-                   data['responder_id'],
-                   data['responder_fullname'])
-
-    def to_JSON(self):
-        return {'_id': self.__id, 'user_id': self.__user_id,
-                'user_fullname': self.__user_fullname,
-                'user_location': self.__user_location,
-                'user_section': self.__user_section,
-                'status': self.__status,
-                'creation_datetime': self.__creation_datetime,
-                'last_modify_datetime': self.__last_modify_datetime,
-                'response_datetime': self.__response_datetime,
-                'responder_id': self.__responder_id,
-                'responder_fullname': self.__responder_fullname}
 
     @staticmethod
     def editing_keyboard():
@@ -270,19 +249,19 @@ class AccessRequest:
         data = cls.collection.find_one({'_id': _id})
         if not data:
             raise RequestNotFoundException(f"Given ID: {_id}")
-        return cls.from_JSON(data)
+        return cls.from_json(data)
 
     @classmethod
     def get_all(cls) -> List[AccessRequest] | list:
-        return list(map(cls.from_JSON, cls.collection.find()))
+        return list(map(cls.from_json, cls.collection.find()))
 
     @classmethod
     def get_waiting(cls) -> List[AccessRequest] | list:
-        return list(map(cls.from_JSON, cls.collection.find({"status": AccessRequestStatuses.waiting.name})))
+        return list(map(cls.from_json, cls.collection.find({"status": AccessRequestStatuses.waiting.name})))
 
     @classmethod
     def get_waiting_by_user_id(cls, user_id: int) -> AccessRequest | None:
-        return cls.from_JSON(cls.collection.find_one({"user_id": user_id, "status": AccessRequestStatuses.waiting.name}))
+        return cls.from_json(cls.collection.find_one({"user_id": user_id, "status": AccessRequestStatuses.waiting.name}))
 
     # @classmethod
     # def get_latest_by_user_id(cls, user_id: int) -> AccessRequest | None:
@@ -296,7 +275,7 @@ class AccessRequest:
     @classmethod
     def create(cls, user: PlansBotUser) -> AccessRequest:
         request = AccessRequest(cls.next_id(), user.id, user.fullname, user.location, user.section, AccessRequestStatuses.waiting.name, now_time())
-        cls.collection.insert_one(request.to_JSON())
+        cls.collection.insert_one(request.to_json())
         return request
 
     @property

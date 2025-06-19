@@ -1,9 +1,5 @@
-import callback_scripts
-import holidays_handlers
-import inline_scripts
-import middleware
-import telegram_disconnection_errors
-import text_scripts
+from bot import callback_scripts, text_scripts, telegram_disconnection_errors, inline_scripts, holidays_handlers, \
+    middleware
 from config import HOLIDAYS
 
 

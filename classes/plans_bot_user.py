@@ -1,11 +1,9 @@
 from __future__ import annotations
 from datetime import date
 
-from aiogram.types import URLInputFile, FSInputFile
-
-from admin_permission import permissions
-from create_bot import bot
-from mongo_connector import mongo_db
+from bot.admin_permission import permissions
+from bot.create_bot import bot
+from utils import mongo_db
 from aiogram import types
 from typing import NamedTuple, Any, List
 
@@ -371,23 +369,17 @@ class PlansBotUser:
 
     @classmethod
     def reg(cls, tg_id: int) -> PlansBotUser:
-        """
-        :rtype :PlansBotUser
-        """
         if not cls.exists_by_id(tg_id):
             new_user = PlansBotUser(tg_id)
-            cls.collection.insert_one(new_user.to_JSON())
+            cls.collection.insert_one(new_user.to_json())
         return cls.get_by_id(tg_id)
 
     @classmethod
     def get_by_id(cls, tg_id: int) -> PlansBotUser:
-        """
-        :rtype :PlansBotUser
-        """
         user_dict = cls.collection.find_one({"id": tg_id}, cls.fields)
         if user_dict is None:
             raise UserNotFoundException(f'ID: {tg_id}')
-        return cls.from_JSON(user_dict)
+        return cls.from_json(user_dict)
 
     async def send_message(self, text: str, reply_to_message_id: int | None = None,
                            markup: types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup | None = None):
@@ -424,7 +416,7 @@ class PlansBotUser:
         for user in user_dicts:
             if Plan.get_by_date_and_user_id(user["id"],
                                             f'{checking_date.day}.{checking_date.month}.{checking_date.year}') is None:
-                users.append(cls.from_JSON(user))
+                users.append(cls.from_json(user))
         return users
 
     @classmethod
@@ -435,7 +427,7 @@ class PlansBotUser:
         for user in user_dicts:
             if Plan.get_by_date_and_user_id(user["id"],
                                             f'{checking_date.day}.{checking_date.month}.{checking_date.year}') is not None:
-                users.append(cls.from_JSON(user))
+                users.append(cls.from_json(user))
         return users
 
     @classmethod
@@ -443,7 +435,7 @@ class PlansBotUser:
         user_dicts = cls.collection.find({})
         users = []
         for user in user_dicts:
-            users.append(cls.from_JSON(user))
+            users.append(cls.from_json(user))
         return users
 
     @classmethod
@@ -530,7 +522,7 @@ class PlansBotUser:
     @property
     def help_message_text(self) -> str:
         text = 'Вот список команд доступных для вас:'
-        from commands import commands
+        from bot.commands import commands
         self_permissions = self.get_field("admin_permissions")
         for command_name, command_info in commands.items():
             ok = True
@@ -544,13 +536,13 @@ class PlansBotUser:
 
     @classmethod
     def get_responders(cls) -> List[PlansBotUser] | list:
-        return list(map(cls.from_JSON, cls.collection.find({"admin_permissions.responder": True})))
+        return list(map(cls.from_json, cls.collection.find({"admin_permissions.responder": True})))
 
-    def to_JSON(self) -> dict:
+    def to_json(self) -> dict:
         return {field: self.__getattribute__(field) for field in self.__class__.fields}
 
     @classmethod
-    def from_JSON(cls, data: dict) -> PlansBotUser:
+    def from_json(cls, data: dict) -> PlansBotUser:
         return cls(*[data[field] for field in cls.fields])
 
     def __set_field(self, field: str, value: Any):

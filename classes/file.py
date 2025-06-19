@@ -5,7 +5,7 @@ from typing import List
 
 from aiogram.types import FSInputFile, InputMediaAudio, InputMediaPhoto, InputMediaVideo, InputMediaDocument
 
-from mongo_connector import mongo_db, get_next_id
+from utils.mongo_connector import mongo_db, get_next_id
 
 
 class File:
@@ -46,19 +46,19 @@ class File:
     def get_files_list(cls, ids: List[int] | list) -> List[int] | list:
         if not ids:
             return []
-        unsorted_list = list(map(cls.from_JSON, list(cls.collection.find({"_id": {'$in': ids}}))))
+        unsorted_list = list(map(cls.from_json, list(cls.collection.find({"_id": {'$in': ids}}))))
         dict_by_ids = {action.id: action for action in unsorted_list}
         return list(map(lambda id_: dict_by_ids[id_], ids))
 
     @classmethod
-    def from_JSON(cls, data: dict | None) -> File | None:
+    def from_json(cls, data: dict | None) -> File | None:
         if data is None:
             return None
         return cls(*[data[field] for field in cls.fields])
 
-    def to_JSON(self, extend: bool = False) -> dict:
+    def to_json(self, extend: bool = False) -> dict:
         if extend:
-            res = self.to_JSON()
+            res = self.to_json()
             res["path"] = self.path
             return res
         return {field: self.__getattribute__(field) for field in self.__class__.fields}
@@ -66,7 +66,7 @@ class File:
     @classmethod
     def create(cls,  type_: str, extension: str, name: str) -> File:
         file = cls(cls.next_id(), type_, extension, name)
-        cls.collection.insert_one(file.to_JSON())
+        cls.collection.insert_one(file.to_json())
         return file
 
     @classmethod
@@ -87,7 +87,7 @@ class File:
 
     @classmethod
     def get_by_id(cls, _id: int) -> File | None:
-        return cls.from_JSON(cls.collection.find_one({"_id": _id}))
+        return cls.from_json(cls.collection.find_one({"_id": _id}))
 
     def to_fs_input_file(self) -> FSInputFile:
         return FSInputFile(self.path, self.name)

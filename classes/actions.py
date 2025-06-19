@@ -3,12 +3,12 @@ from __future__ import annotations
 from classes.file import File
 from typing import List, Any
 
-from aiogram.types import InlineKeyboardMarkup, FSInputFile, InputMediaPhoto
+from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from classes import PlansBotUser
 from classes.inline_button import InlineButton, ButtonCallbackData
-from mongo_connector import mongo_db, get_next_id
+from utils import mongo_db, get_next_id
 
 
 class SendMessageAction:
@@ -130,33 +130,33 @@ class SendMessageAction:
                                           self._inline_buttons_ids[i1])
         self.__set_field("inline_buttons_ids", self._inline_buttons_ids)
 
-    def to_JSON(self, extend: bool = False) -> dict:
+    def to_json(self, extend: bool = False) -> dict:
         if extend:
-            res = self.to_JSON()
-            res["files"] = list(map(lambda file: file.to_JSON(True), self.files))
-            res["keyboard"] = list(map(lambda inline_button: inline_button.to_JSON(), self.keyboard))
+            res = self.to_json()
+            res["files"] = list(map(lambda file: file.to_json(True), self.files))
+            res["keyboard"] = list(map(lambda inline_button: inline_button.to_json(), self.keyboard))
             return res
         return {"type": "send_message", **{field: self.__getattribute__(field) for field in self.__class__.fields}}
 
     @classmethod
-    def from_JSON(cls, data: dict | None) -> SendMessageAction | None:
+    def from_json(cls, data: dict | None) -> SendMessageAction | None:
         if data is None:
             return None
         return cls(*[data[field] for field in cls.fields])
 
     @classmethod
     def create(cls, message_text: str) -> SendMessageAction:
-        return cls.get_by_id(cls.collection.insert_one(cls(cls.next_id(), message_text).to_JSON()).inserted_id)
+        return cls.get_by_id(cls.collection.insert_one(cls(cls.next_id(), message_text).to_json()).inserted_id)
 
     @classmethod
     def get_by_id(cls, _id: int) -> SendMessageAction:
-        return cls.from_JSON(cls.collection.find_one({"_id": _id}))
+        return cls.from_json(cls.collection.find_one({"_id": _id}))
 
     @classmethod
     def get_list_by_ids(cls, ids: List[int] | list) -> List[SendMessageAction] | list:
         if not ids:
             return []
-        unsorted_list = list(map(cls.from_JSON, list(cls.collection.find({"_id": {'$in': ids}}))))
+        unsorted_list = list(map(cls.from_json, list(cls.collection.find({"_id": {'$in': ids}}))))
         dict_by_ids = {action.id: action for action in unsorted_list}
         return list(map(lambda id_: dict_by_ids[id_], ids))
 
@@ -214,4 +214,89 @@ class SendMessageAction:
 
     @classmethod
     def get_by_containing_file_id(cls, file_id: int):
-        return cls.from_JSON(cls.collection.find_one({"files_ids": file_id}))
+        return cls.from_json(cls.collection.find_one({"files_ids": file_id}))
+
+
+class CallCommandAction:
+    collection_name = "Actions"
+    collection = mongo_db[collection_name]
+    fields = ["_id", "command_name"]
+
+    def __init__(self, _id: int,
+                 command_name: str):
+        self._id = _id
+        self._command_name = command_name
+
+    @classmethod
+    def next_id(cls) -> int:
+        return get_next_id(cls.collection.name)
+
+    @property
+    def id(self) -> int:
+        return self._id
+
+    @property
+    def command_name(self) -> str:
+        return self._command_name
+
+    @command_name.setter
+    def command_name(self, new_command_name: str):
+        self.collection.update_one({'_id': self.id}, {'$set': {'command_name': new_command_name}})
+        self._command_name = new_command_name
+
+    def to_json(self, extend: bool = False) -> dict:
+        if extend:
+            res = self.to_json()
+            res["files"] = list(map(lambda file: file.to_json(True), self.files))
+            res["keyboard"] = list(map(lambda inline_button: inline_button.to_json(), self.keyboard))
+            return res
+        return {"type": "call_command", **{field: self.__getattribute__(field) for field in self.__class__.fields}}
+
+    @classmethod
+    def from_json(cls, data: dict | None) -> CallCommandAction | None:
+        if data is None:
+            return None
+        return cls(*[data[field] for field in cls.fields])
+
+    @classmethod
+    def create(cls, message_text: str) -> CallCommandAction:
+        return cls.get_by_id(cls.collection.insert_one(cls(cls.next_id(), message_text).to_json()).inserted_id)
+
+    @classmethod
+    def get_by_id(cls, _id: int) -> CallCommandAction:
+        return cls.from_json(cls.collection.find_one({"_id": _id}))
+
+    @classmethod
+    def get_list_by_ids(cls, ids: List[int] | list) -> List[CallCommandAction] | list:
+        if not ids:
+            return []
+        unsorted_list = list(map(cls.from_json, list(cls.collection.find({"_id": {'$in': ids}}))))
+        dict_by_ids = {action.id: action for action in unsorted_list}
+        return list(map(lambda id_: dict_by_ids[id_], ids))
+
+    async def process(self, user: PlansBotUser) -> None:
+        await user.send_message(self.message_text, markup=self.inline_keyboard_markup)
+
+    def delete(self):
+        self.__class__.delete_by_id(self.id, self)
+
+    @classmethod
+    def delete_by_id(cls, _id: int, obj: CallCommandAction | None = None) -> None:
+        if not obj:
+            obj = cls.get_by_id(_id)
+        from classes import CatalogItem
+        c_i = CatalogItem.get_by_containing_action_id(_id)
+        i_b = InlineButton.get_by_containing_action_id(_id)
+        if c_i:
+            c_i.remove_action_by_id(_id)
+        if i_b:
+            i_b.remove_action_by_id(_id)
+        cls.collection.delete_one({'_id': _id})
+
+    def __set_field(self, field_name: str, value: Any) -> None:
+        self.__class__.__set_field_by_id(self.id, field_name, value)
+
+    @classmethod
+    def __set_field_by_id(cls, _id: int, field_name: str, value: Any) -> None:
+        cls.collection.update_one({"_id": _id}, {"$set": {field_name: value}})
+

@@ -1,11 +1,11 @@
 from aiogram.dispatcher.flags import get_flag
 
-from check_message_types import is_command
+from utils import is_command
 from classes import PlansBotUser
-from create_bot import dp
+from bot.create_bot import dp
 from aiogram import types
 
-from filters import StateFilter
+from bot.filters import StateFilter
 
 
 async def get_user_update_outer_middleware(handler: callable,
