@@ -224,7 +224,7 @@ async def callback_for_add_email_button(query: types.CallbackQuery, user: PlansB
 async def callback_for_cancel_adding_email_button(query: types.CallbackQuery, user: PlansBotUser):
     user.state = 'NONE'
     await query.answer('Добавление почты отменено!', True)
-    from text_scripts import emails_command
+    from message_handlers import emails_command
     await emails_command(query.message)
 
 
@@ -279,7 +279,7 @@ async def callback_for_delete_email_button(query: types.CallbackQuery, user: Pla
         return
     Email.delete_by_address(user.state.split()[-1])
     user.state = 'NONE'
-    from text_scripts import emails_command
+    from message_handlers import emails_command
     await emails_command(query.message)
 
 
@@ -287,7 +287,7 @@ async def callback_for_end_editing_email_button(query: types.CallbackQuery, user
     if not Email.exists(user.state.split()[-1]):
         await query.answer('Эта почта уже отсутствует в базе почт!', True)
     user.state = 'NONE'
-    from text_scripts import emails_command
+    from message_handlers import emails_command
     await emails_command(query.message)
 
 
